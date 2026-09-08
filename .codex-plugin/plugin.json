@@ -1,0 +1,20 @@
+{
+  "name": "betflux",
+  "version": "0.1.0",
+  "description": "Query BetFlux sportsbook datasets with quota-aware CLI and Python workflows.",
+  "author": { "name": "BetFlux", "url": "https://betflux.ai" },
+  "homepage": "https://betflux.ai/developer/sdk/agents/",
+  "repository": "https://github.com/betflux/skills",
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "BetFlux",
+    "shortDescription": "Explore sportsbook data with quota-aware queries",
+    "longDescription": "Discover games and query closing lines, market results, line history, and game state using the BetFlux CLI or Python SDK. Requires a Python-capable environment and a BetFlux API key configured outside the conversation.",
+    "developerName": "BetFlux",
+    "category": "Productivity",
+    "capabilities": [],
+    "websiteURL": "https://betflux.ai",
+    "defaultPrompt": ["Explore BetFlux datasets and plan a small query."]
+  }
+}

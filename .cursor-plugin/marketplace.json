@@ -1,0 +1,14 @@
+{
+  "name": "betflux",
+  "owner": {
+    "name": "BetFlux",
+    "url": "https://betflux.ai"
+  },
+  "plugins": [
+    {
+      "name": "betflux",
+      "source": "./",
+      "description": "Query BetFlux sportsbook odds data for US leagues from an AI agent"
+    }
+  ]
+}

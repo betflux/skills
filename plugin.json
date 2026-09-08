@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "betflux",
+  "version": "0.1.0",
+  "description": "Query BetFlux sportsbook datasets with quota-aware CLI and Python workflows.",
+  "author": { "name": "BetFlux", "url": "https://betflux.ai" },
+  "homepage": "https://betflux.ai/developer/sdk/agents/",
+  "repository": "https://github.com/betflux/skills",
+  "license": "MIT"
+}
