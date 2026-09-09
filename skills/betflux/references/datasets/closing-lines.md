@@ -9,7 +9,6 @@ The closing lines dataset · 42 columns · hundreds of rows per game
 | Leagues | MLB, NBA, NHL, NFL, NCAAM |
 | Addressing | date range **or** `--game` |
 | Filters | `league`, `operator`, `market_type`, `team`, `side`, `player_id` |
-| History-gated | yes — tier history depth applies |
 
 ## Columns
 

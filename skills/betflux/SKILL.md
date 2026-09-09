@@ -1,6 +1,6 @@
 ---
 name: betflux
-description: Discover and query BetFlux sportsbook datasets through its CLI, Python SDK, or HTTP API. Use for BetFlux data access, historical odds analysis, closing line value, and quota-aware download planning.
+description: Discover and query BetFlux sportsbook datasets through its CLI, Python SDK, or HTTP API. Use for BetFlux data access, historical odds analysis, closing line value, and dataset exploration.
 ---
 
 # BetFlux
@@ -27,42 +27,24 @@ Keys are minted at <https://betflux.ai/account/api-keys> and shown once.
 leave it there. If it is missing, tell the user to set `BETFLUX_API_KEY` — do
 not ask them to paste it into the conversation.
 
-## The cost model — read this before any query
+## Query behavior
 
-This is the part that is easy to get wrong, and getting it wrong spends the
-user's money.
+The artifact endpoint streams one whole Parquet file per game; row filters
+are evaluated locally after download. On range queries, team and league also
+narrow game discovery, reducing the number of files fetched.
 
-1. **Quota meters rows *downloaded*, not rows returned to you.**
-2. **The artifact endpoint never filters rows.** It streams one whole Parquet file per game.
-   Every `--operator`, `--market-type`, `--team`, `--side`, `--player-id`,
-   `--outcome`, `--field`, `--source` filter is evaluated **locally, after
-   download**. These row filters do not reduce an individual file's quota cost.
-   On range queries, `--team` and `--league` also narrow game discovery, reducing
-   the number of files downloaded.
-3. **The only lever that reduces spend is fetching fewer games** — a narrower
-   `--date-from`/`--date-to`, discovery by team/league, or a single `--game`.
-4. `--limit N` stops *fetching* once N rows have been yielded on a range query,
-   but **does not cap downloaded rows or quota**. Each file is billed in full;
-   if local filters match nothing, every game in the range can be downloaded.
-   It truncates arbitrarily, mid-league and mid-date. Use it to sample output,
-   not to answer a question about a full period or enforce a spending limit.
-5. A partial read is a full read: HTTP Range requests debit the artifact's
-   entire row count.
+`--limit N` stops fetching once N matching rows have been yielded on a range
+query. It limits output, not the number of downloaded rows: if local filters
+match nothing, every game in the range can still be downloaded. Results may
+end mid-game or mid-date; do not treat a limited sample as a complete period.
 
-Practical rules:
-
-- Start with `betflux keys check` so you know the tier, rows used, and reset date.
-- Start narrow — one day, or one game — confirm the shape, then widen.
-- Before a range query, estimate: *games in range × rows per game* (see the
-  table below). If that is a large fraction of the user's remaining quota,
-  **say so and ask** before running it.
-- Never fetch `sportsbook-lines` across a date range. It is ~190k rows for a
-  single game; the CLI restricts it to `--game` for exactly this reason.
+Start with one game or day to confirm the shape before widening the query.
+`sportsbook-lines` and `game-state-timeline` support `--game` only.
 
 ## Workflow
 
 ```bash
-betflux keys check                                     # tier + remaining quota
+betflux keys check                                     # validate credentials
 betflux datasets                                       # what's available
 betflux games --league NBA --date-from 2026-04-01 --date-to 2026-04-07
 betflux get closing-lines --game NBA_GSW_MIA_20260401  # one game first
@@ -94,7 +76,7 @@ MLB_BOS_NYY_20260715_2
 ```
 
 Do not construct these from guessed abbreviations — discover them with
-`betflux games`, which is a cheap JSON call that does not debit row quota.
+`betflux games`, which returns game metadata as JSON.
 
 ## Filters
 
@@ -132,23 +114,13 @@ yourself; it keeps the transcript small. Timestamps generally render as ISO 8601
 | Status | Meaning | What to do |
 |---|---|---|
 | 401 | key missing, malformed, or unrecognized | check `BETFLUX_API_KEY` is set and unabridged |
-| 402 | no active subscription for this key | user must subscribe; do not retry |
+| 402 | access unavailable for this key | report the API's error details; do not retry |
 | 403 | key revoked or suspended | user must mint a new key; do not retry |
-| 429 | rate limit, row quota, or ops throttle | the client already retries with backoff honoring `Retry-After`; on quota, **stop** |
+| 429 | request rejected by a service limit | respect `Retry-After`; if the client surfaces an error, report it rather than looping |
 | 404 | unknown game, dataset, or league not covered | verify with `betflux games` / `betflux datasets` |
 
-Errors are RFC 9457 problem+json; the `type` URI distinguishes the three 429
-causes. Do not paper over a 402 or 403 by retrying — they are terminal until
-the user acts.
-
-## Tiers
-
-Rate limits and a monthly row quota apply per tier. `betflux keys check` and
-`GET /v1/me` report the live numbers — read them rather than assuming.
-
-**DEMO is pinned to a fixed sample month.** A date range outside that month
-returns nothing useful, and DEMO cannot mint keys of its own. If a demo user
-asks for last week's games, explain the limitation instead of retrying.
+Errors are RFC 9457 problem+json; inspect the `type` and `detail` fields.
+Do not retry access errors without resolving their cause.
 
 ## Python
 
@@ -161,16 +133,15 @@ with Client() as bf:
     df = bf.closing_lines.df(league="NBA", date_from="2026-04-01", date_to="2026-04-07")
 ```
 
-The same cost model applies — `df()` over a wide range downloads every game in
-it. Details in `references/python.md`.
+`df()` over a wide range downloads the selected games before returning. Details in `references/python.md`.
 
 ## Reference index
 
-Read these only when the task needs them; they cost nothing until you do.
+Read these only when the task needs them.
 
 - **[references/datasets/closing-lines.md](references/datasets/closing-lines.md)** — columns, filters, coverage
 - **[references/datasets/market-results.md](references/datasets/market-results.md)** — graded outcomes and settlement columns
-- **[references/datasets/sportsbook-lines.md](references/datasets/sportsbook-lines.md)** — full line history; the expensive one
+- **[references/datasets/sportsbook-lines.md](references/datasets/sportsbook-lines.md)** — full line history
 - **[references/datasets/game-state-timeline.md](references/datasets/game-state-timeline.md)** — observation rows, field/source values
 - **[references/cli.md](references/cli.md)** — every command and flag
 - **[references/python.md](references/python.md)** — `Client`, dataset handles, typed errors, DuckDB

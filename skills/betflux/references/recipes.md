@@ -1,7 +1,6 @@
 # Recipes
 
-Worked examples. Each one starts narrow on purpose — see the cost model in
-`SKILL.md`.
+Worked examples. See `SKILL.md` for query behavior and supported datasets.
 
 ## Closing line value for one team over a week
 
@@ -93,14 +92,3 @@ betflux get game-state-timeline --game NBA_GSW_MIA_20260401 --field home_score
 Flat observation rows: `ts` / `field` / `value` / `source`. `ts` is an **int64
 of epoch milliseconds (UTC)** — the one timestamp column that is not a native
 Parquet timestamp. Multiple sources report the same field; `--source` picks one.
-
-## Checking spend before a big query
-
-```bash
-betflux keys check                       # rows used, remaining, reset date
-betflux games --league NBA --date-from 2026-01-01 --date-to 2026-04-01 --format json | jq length
-```
-
-Multiply the game count by the dataset's rows-per-game (see `SKILL.md`) and
-compare against what `keys check` reported. If it is a large fraction of the
-remaining quota, say so before running it.

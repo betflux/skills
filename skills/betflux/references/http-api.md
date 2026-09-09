@@ -17,16 +17,15 @@ For non-Python callers. Every `/v1` request needs `Authorization: Bearer bfx_liv
 | `GET` | `/v1/games` | List games with league, ET date-range, team, and status filters. |
 | `GET` | `/v1/games/{game_id}` | Fetch a single game by public id. |
 | `GET` | `/v1/games/{game_id}/{dataset}` | Download a dataset's per-game Parquet artifact. |
-| `GET` | `/v1/me` | Introspect the calling API key: tier, rate limit, and quota usage. |
+| `GET` | `/v1/me` | Inspect the calling API key. |
 
 ## Payloads
 
 `GET /v1/games/{game_id}/{dataset}` returns a Parquet file
 (`application/vnd.apache.parquet`), not JSON. The server streams bytes and
-never filters rows. Range requests are supported (206) — but a partial read
-still debits the artifact's full row count.
+never filters rows. Range requests are supported (206).
 
 Everything else returns JSON. Errors are RFC 9457 problem+json; the `type`
-URI distinguishes rate-limit from quota from ops-throttle on a 429.
+and `detail` fields describe the failure. Respect `Retry-After` when provided.
 
 Machine-readable spec: `https://api.betflux.ai/v1/openapi.json` · interactive: `https://api.betflux.ai/docs`

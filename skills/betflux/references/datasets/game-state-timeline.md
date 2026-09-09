@@ -9,7 +9,6 @@ The state timeline dataset · 7 columns · thousands of rows per game
 | Leagues | MLB, NBA, NHL, NFL |
 | Addressing | `--game` only |
 | Filters | `league`, `field`, `source` |
-| History-gated | no |
 
 > Addressed one game at a time.
 

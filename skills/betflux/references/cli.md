@@ -1,6 +1,6 @@
 # betflux CLI reference
 
-Every command and flag. For the cost model and query-planning rules, see
+Every command and flag. For query behavior and planning, see
 `SKILL.md` — this file is the surface, not the strategy.
 
 ## Global options
@@ -20,8 +20,7 @@ These go **before** the command: `betflux --timeout 5 games`, not
 
 ### `betflux keys check`
 
-Validates the key and reports tier, rate limit, rows used this month, and the
-reset date. Run this first — it costs no row quota.
+Validates the key and reports the API's account metadata.
 
 ### `betflux datasets [--format]`
 
@@ -31,8 +30,7 @@ or `record` keeps the full detail.
 
 ### `betflux games`
 
-Lists games and their public ids. JSON reference data — does **not** debit row
-quota, so use it freely to discover ids.
+Lists games and their public ids as JSON reference data.
 
 | Option | Notes |
 |---|---|
@@ -52,7 +50,7 @@ Reference data. `teams` takes `--league`; `players` takes `--league` and/or
 
 ### `betflux get <dataset>`
 
-The only command that debits row quota.
+Downloads dataset files and returns matching rows.
 
 **Addressing** — exactly one of:
 
@@ -61,9 +59,7 @@ The only command that debits row quota.
 | `--date-from` + `--date-to` (+ optional `--league`) | `closing-lines`, `market-results` |
 | `--game <id>` | all four |
 
-`sportsbook-lines` and `game-state-timeline` are `--game`-only. For
-`sportsbook-lines` this is a deliberate guard — a range query would debit
-~190k rows per game.
+`sportsbook-lines` and `game-state-timeline` are `--game`-only.
 
 **Filters** (rows are filtered locally after download; team and league also
 narrow game discovery on range queries, reducing downloads):
@@ -85,7 +81,7 @@ A filter naming a column the dataset lacks is rejected before any download.
 
 | Option | Notes |
 |---|---|
-| `--limit N` | Range queries only: stop after N matching rows. Not a quota cap; sparse filters can download the entire range |
+| `--limit N` | Range queries only: stop after N matching rows. Does not cap downloaded rows; sparse filters can download the entire range |
 | `--output PATH` | With `--game`: save the raw Parquet file, no parsing. Prints one summary line |
 | `--columns a,b,c` | Override the default projection |
 | `--wide` | Table only: every column instead of the curated subset |

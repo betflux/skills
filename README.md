@@ -4,10 +4,8 @@ An [Agent Skill](https://agentskills.io) for querying [BetFlux](https://betflux.
 normalized US sportsbook odds (NFL, NBA, MLB, NHL, NCAAM) served as per-game
 Parquet files.
 
-The skill teaches an agent our cost model, which is easy to get wrong: **quota
-meters rows downloaded, filters run locally, and one `sportsbook-lines` game is
-~190k rows.** Without it, an agent will happily spend a month's quota answering
-one question.
+The skill teaches an agent how to discover games, choose datasets, apply
+filters, and work with Parquet files through the CLI, Python SDK, or HTTP API.
 
 ## Installing
 
@@ -45,12 +43,12 @@ Copy `skills/betflux/` into your agent's skill directory:
 
 | Skill | Useful for |
 |---|---|
-| `betflux` | Querying closing lines, graded market results, full line history, and game state timelines; cost-aware query planning |
+| `betflux` | Querying closing lines, graded market results, full line history, and game state timelines |
 
 ## Getting a key
 
 The skill needs `BETFLUX_API_KEY` set in the environment. Mint one at
-<https://betflux.ai/account/api-keys>. An entitled account is required.
+<https://betflux.ai/account/api-keys>.
 
 ### ChatGPT and Codex plugins
 

@@ -9,9 +9,8 @@ The sportsbook lines dataset · 67 columns · ~190,000 rows per game
 | Leagues | MLB, NBA, NHL, NFL, NCAAM |
 | Addressing | `--game` only |
 | Filters | `league`, `operator`, `market_type`, `team`, `side`, `player_id` |
-| History-gated | yes — tier history depth applies |
 
-> Range queries are refused on purpose: one game is ~190k rows, and quota meters rows downloaded.
+> Addressed one game at a time.
 
 > Only 5 of 67 columns carry descriptions — this dataset's row
 > schema is declared as column tuples rather than described fields. Types

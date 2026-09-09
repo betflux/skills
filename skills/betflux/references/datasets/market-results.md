@@ -9,7 +9,6 @@ The market results dataset · 29 columns · hundreds of rows per game
 | Leagues | MLB, NBA, NHL, NFL |
 | Addressing | date range **or** `--game` |
 | Filters | `league`, `operator`, `market_type`, `team`, `side`, `outcome` |
-| History-gated | yes — tier history depth applies |
 
 > Only 5 of 29 columns carry descriptions — this dataset's row
 > schema is declared as column tuples rather than described fields. Types
