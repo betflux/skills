@@ -18,6 +18,26 @@ These go **before** the command: `betflux --timeout 5 games`, not
 
 ## Commands
 
+### `betflux plugin install --claude | --codex | --cursor`
+
+Specify one agent per invocation. Run the command separately for each agent
+you use; installing in both Claude Code and Codex is supported.
+Claude Code and Codex register `betflux/skills` and install through
+their native plugin managers; Claude uses user scope. The host CLI must already
+be installed. An API key is not needed for plugin installation.
+
+Rerunning refreshes the repository, updates the plugin, and enables it.
+`--cursor` prints manual setup
+instructions and exits nonzero without installing. The command never copies
+the SDK's bundled skill or deletes existing files. Start a new
+agent session after installing or updating; use the native manager for removal.
+
+### `betflux agent-guide`
+
+Prints the guide bundled with the installed SDK to stdout, without network
+access or installation. This snapshot may differ from an independently
+released plugin.
+
 ### `betflux keys check`
 
 Validates the key and reports the API's account metadata.

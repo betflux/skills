@@ -14,12 +14,23 @@ Codex, Cursor, OpenCode, Copilot, Gemini CLI, and others.
 
 ### From the betflux CLI
 
-If you already have the CLI, it ships the skill:
+Install the BetFlux CLI, then run the command for each agent you use:
 
 ```bash
 pip install betflux        # or: uv tool install betflux
-betflux skill install      # --codex, --project also available
+betflux plugin install --claude
+betflux plugin install --codex
+# Cursor setup instructions: betflux plugin install --cursor
 ```
+
+The wrapper delegates to the installed agent's native plugin manager, which
+fetches this repository and owns updates and removal. It requires network
+access but no BetFlux API key for installation. Rerun the command to refresh
+the repository, update the plugin, and enable it. Specify one agent per invocation;
+there is no implicit default. You can install in both Claude Code and Codex by
+running both commands.
+
+You can also install directly through your agent using the commands below.
 
 ### Claude Code
 
@@ -28,7 +39,37 @@ betflux skill install      # --codex, --project also available
 /plugin install betflux@betflux
 ```
 
-### Clone / copy
+### Codex
+
+Run these commands in your terminal with Codex CLI installed:
+
+```bash
+codex plugin marketplace add https://github.com/betflux/skills.git
+codex plugin add betflux@betflux
+```
+
+To update an existing installation, refresh the marketplace and add the plugin
+again. This also enables the plugin if it is disabled:
+
+```bash
+codex plugin marketplace upgrade betflux
+codex plugin add betflux@betflux
+```
+
+Start a new Codex session after installing or updating. Use `/plugins` inside
+Codex to inspect your installed plugins. See
+[OpenAI's plugin documentation](https://learn.chatgpt.com/docs/plugins).
+
+### Cursor
+
+`betflux plugin install --cursor` reports manual setup instructions and exits
+nonzero; it does not pretend to install the plugin. For local testing, clone
+this repository into a new `~/.cursor/plugins/local/betflux` directory, reload
+Cursor, and confirm the skill in Customize. Do not overwrite an existing
+directory. Managed workspaces may require Allow Local Plugin Imports.
+See [Cursor's plugin documentation](https://cursor.com/docs/plugins).
+
+### Clone / copy (advanced compatibility option)
 
 Copy `skills/betflux/` into your agent's skill directory:
 
