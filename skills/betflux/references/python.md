@@ -14,12 +14,16 @@ the client parses them locally.
 ```python
 from betflux import Client
 
-with Client() as bf:          # reads BETFLUX_API_KEY / BETFLUX_BASE_URL
+with Client() as bf:          # uses explicit environment credentials or saved login
     ...
 ```
 
 `Client(api_key=..., base_url=..., timeout=30.0, user_agent=...)` overrides the
-environment. Always use it as a context manager, or call `.close()`.
+environment. Without an explicit key or `BETFLUX_API_KEY`, the client
+uses the credential saved by `betflux login` for the selected API URL
+(`base_url`, `BETFLUX_BASE_URL`, or the production default). Install the SDK in
+your project's Python environment even if the CLI is installed with `uv tool`.
+Always use it as a context manager, or call `.close()`.
 
 ### Reference data
 
@@ -42,11 +46,16 @@ by public name.
 | Method | Returns |
 |---|---|
 | `.game(game_id, **filters)` | list of row dicts for one game |
-| `.query_game(game_id, **filters)` | `(rows, hint)` — hint explains a zero-row result |
+| `.query_game(game_id, **filters)` | `(rows, hint)` — hint explains a zero-row result; also `.provisional` |
 | `.iter(**kwargs)` | streaming iterator over a range |
 | `.rows(**kwargs)` | list over a range |
 | `.df(**kwargs)` | pandas DataFrame (needs the `pandas` extra) |
-| `.raw(game_id)` | the Parquet bytes, verbatim |
+| `.raw(game_id)` | the Parquet bytes — verbatim for a settled game; a live game's are its segments stitched and re-encoded by the SDK |
+| `.is_live(game_id)` | `sportsbook_lines` only: is the game being served live (any 404 reads as no) |
+| `.live_segments(game_id, cursor)` | `sportsbook_lines` only: one poll step |
+| `.live_cursor(game_id)` | `sportsbook_lines` only: the current position, one free listing |
+| `.live_board(game_id, operator=None)` | `sportsbook_lines` only: the current board |
+| `.live_urls(game_id)` | `sportsbook_lines` only: segment URLs for DuckDB |
 
 ```python
 for row in bf.closing_lines.iter(
@@ -90,6 +99,10 @@ Common errors subclass `BetfluxError`; catch that base class for other API failu
 | `AuthError` | 401 — key missing, malformed, unrecognized |
 | `ForbiddenError` | 403 — key revoked or suspended |
 | `NotFoundError` | 404 — unknown game/dataset, or league not covered |
+| `GameLiveError` | 404 `not-final` — the game is still live. A `NotFoundError` subclass; the dataset methods handle it for you |
+| `LiveCursorResetError` | 409 — the live log was rebuilt under the cursor; start over without one |
+| `LiveSegmentBehindError` | 409 on a listed segment URL — behind its listing; the dataset methods re-list for you |
+| `LiveInconsistentError` | a live step's listing and bodies kept disagreeing; nothing returned, cursor unmoved — call again |
 | `RateLimitError` | 429 — per-minute limit |
 | `NetworkError` | transport failure |
 | `APIError` | other non-2xx |
@@ -97,6 +110,45 @@ Common errors subclass `BetfluxError`; catch that base class for other API failu
 Rate limits, 5xx, and transport failures retry automatically with backoff that
 honors `Retry-After` (capped). Access errors are
 terminal until their cause is resolved — do not retry them.
+
+## Live games
+
+An unsettled game has no final `sportsbook-lines` file. Every method above
+handles that without being asked: the client follows the API's live pointer,
+downloads the Parquet segments and concatenates them into the same columns the
+final file would have. The only difference is that the rows are **provisional**
+— `query_game()` reports it as `.provisional`. Every such call downloads every
+segment again (listings are free, and each live row is charged once per account
+per month, so a repeat is charged only for rows published since), so rather than
+looping `game()` on a live game, poll:
+
+```python
+cursor = None                     # or bf.sportsbook_lines.live_cursor(game_id): skip the history
+while True:
+    step = bf.sportsbook_lines.live_segments(game_id, cursor)
+    cursor = step.cursor          # "0:0" until a first segment exists
+    handle(step.rows)             # what is new; also step.table (pyarrow)
+    time.sleep(5)                 # listings are edge-cached for 5 s
+```
+
+The listing is free and incremental; the segments it names are downloaded
+whole — the open tail on every poll in which it grew — but each row is charged
+once per account per month, so a poll costs only the rows it brings in. Polling
+faster than the ~5 s cache re-downloads the same bytes. A first poll without a
+cursor backfills the whole history.
+
+The cursor is an opaque position, not a timestamp: a slower operator's file can
+land after a faster one's later-stamped rows, so a timestamp would drop them.
+`LiveCursorResetError` means the log was rebuilt under it — start again
+without a cursor; `LiveInconsistentError` means the listing and a segment body
+kept disagreeing through the SDK's bounded retry — nothing was returned and
+the cursor did not move, so call again.
+
+`live_board(game_id, operator=None)` is the current snapshot — one row per
+selection believed quotable, adding `quote_state` (`live` / `stale_suspect`),
+`last_changed_at` and `operator_observed_through`. `live_urls(game_id)` returns
+the segment URLs for DuckDB `read_parquet`, verbatim — `?rows=N` included; a
+segment behind that count answers 409 rather than a short file.
 
 ## Progress
 

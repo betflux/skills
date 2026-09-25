@@ -2,7 +2,7 @@
 
 # sportsbook-lines
 
-The sportsbook lines dataset · 67 columns · ~190,000 rows per game
+The sportsbook lines dataset · 72 columns · ~190,000 rows per game
 
 | | |
 |---|---|
@@ -12,7 +12,7 @@ The sportsbook lines dataset · 67 columns · ~190,000 rows per game
 
 > Addressed one game at a time.
 
-> Only 5 of 67 columns carry descriptions — this dataset's row
+> Only 10 of 72 columns carry descriptions — this dataset's row
 > schema is declared as column tuples rather than described fields. Types
 > and nullability below are authoritative; a blank description means not
 > yet written, not "no meaning".
@@ -64,7 +64,12 @@ The sportsbook lines dataset · 67 columns · ~190,000 rows per game
 | `odds` | `integer` | no |  |
 | `decimal_odds` | `number` | no |  |
 | `implied_probability` | `number` | no |  |
-| `complement_odds` | `number` | yes | American odds of the "No" side each fair-value column was de-vigged against. For PAIRED structures it is the real pair partner's price; for INDEPENDENT structures (and unpaired selections) it is synthesized so the two-way book sums to an assumed 5% overround — an assumption, not an observed price. Null for MECE structures (the whole market is the complement) and wherever no consistent synthetic complement exists (longshots at or above +1900), in which case every fair-value column on the row is also null. |
+| `synthetic_overround` | `number` | yes | Margin available for synthetic complements at this observation. Measured from verified complementary polls at or before timestamp, or the 5% default. Null for MECE; real paired complements do not use this estimate. |
+| `calibration_source` | `string` | yes | Source of synthetic_overround: validated_operator_market_type, validated_operator, or assumed_default. Null for MECE. Present on point-in-time sportsbook-lines v5 artifacts. |
+| `calibration_sample_count` | `integer` | yes | Number of accepted complementary polls in the selected calibration population. Zero for the assumed default; null for MECE. |
+| `calibration_first_timestamp` | `string` | yes | Earliest accepted observation used in the selected synthetic-margin estimate. Null for an assumed default or MECE. |
+| `calibration_last_timestamp` | `string` | yes | Latest accepted observation used in the selected synthetic-margin estimate; never later than this row timestamp. Null for an assumed default or MECE. |
+| `complement_odds` | `number` | yes | American odds of the complement used for de-vigging. Real paired sides use the partner quote; independent or unpaired sides use synthetic_overround calibrated only through this observation timestamp. Null for MECE or when no consistent synthetic complement exists; the latter also produces null fair values. |
 | `multiplicative_fair_prob` | `number` | yes |  |
 | `multiplicative_fair_american` | `number` | yes |  |
 | `multiplicative_fair_decimal` | `number` | yes |  |

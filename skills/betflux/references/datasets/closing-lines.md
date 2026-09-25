@@ -33,12 +33,12 @@ The closing lines dataset · 42 columns · hundreds of rows per game
 | `opening_spread` | `number` | yes | Point spread (handicap) at open; null for non-spread markets. |
 | `opening_total` | `number` | yes | Total (over/under line) at open; null for non-total markets. |
 | `opening_ts` | `string` | yes | Timestamp of the first observed record, ISO-8601 UTC. |
-| `closing_odds` | `integer` | yes | American odds of the last record observed before game_start; null when the side was only seen live. |
+| `closing_odds` | `integer` | yes | American odds of the last eligible active quote strictly before game_start; null when no eligible pre-game quote exists. |
 | `closing_decimal` | `number` | yes | Decimal odds at close. |
 | `closing_implied` | `number` | yes | Implied probability at close (vig included, 0-1). |
 | `closing_spread` | `number` | yes | Point spread (handicap) at close. |
 | `closing_total` | `number` | yes | Total (over/under line) at close. |
-| `closing_ts` | `string` | yes | Timestamp of the last pre-game record, ISO-8601 UTC. |
+| `closing_ts` | `string` | yes | Timestamp of the last eligible active pre-game quote, ISO-8601 UTC; null when no eligible pre-game quote exists. |
 | `min_odds` | `integer` | yes | Lowest American odds observed across all records, pre-game and live. |
 | `max_odds` | `integer` | yes | Highest American odds observed across all records, pre-game and live. |
 | `distinct_odds_count` | `integer` | yes | Number of distinct American-odds values observed. |
@@ -47,8 +47,8 @@ The closing lines dataset · 42 columns · hundreds of rows per game
 | `live_records` | `integer` | yes | Change-only records observed at or after game_start. |
 | `first_seen_at` | `string` | yes | Timestamp this side was first observed, ISO-8601 UTC. |
 | `last_seen_at` | `string` | yes | Timestamp this side was last observed (including live), ISO-8601 UTC. |
-| `clv_odds` | `integer` | yes | closing_odds - opening_odds in American odds; null when either is missing. |
-| `clv_implied` | `number` | yes | opening_implied - closing_implied; null when either is missing. |
+| `clv_odds` | `integer` | yes | closing_odds - opening_odds in American odds; null when either is missing or the opening and closing market meanings are incompatible. |
+| `clv_implied` | `number` | yes | opening_implied - closing_implied; null when either is missing or the opening and closing market meanings are incompatible. |
 | `market_player_ids` | `string[]` | yes | Player UUIDs referenced by the market, as of the closing record. |
 | `selection_player_ids` | `string[]` | yes | Player UUIDs referenced by the selection, as of the closing record. |
 | `market_metric` | `string[]` | yes | Structured stat metric(s) the market prices (SportsMetric enum, e.g. FOOTBALL_RECEIVING_YARDS); null for non-player-metric markets. Join key for prop analysis — no name parsing needed (adr-0027). |

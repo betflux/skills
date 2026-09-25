@@ -15,17 +15,33 @@ Requires a shell or Python runtime with network access to the BetFlux API.
 If the host cannot run the CLI or securely provide credentials, return commands
 for the user to run; installing this skill does not create an MCP connection.
 
+First run `betflux keys check` if the CLI is installed. A saved login may
+already be available; do not require an environment variable when it works.
+
+For a new installation, have the user run:
+
 ```bash
-pip install betflux          # or: uv tool install betflux
-export BETFLUX_API_KEY=bfx_live_...
+uv tool install betflux      # or: pip install betflux
+betflux login
 betflux keys check
 ```
 
-Keys are minted at <https://betflux.ai/account/api-keys> and shown once.
+The user opens the printed URL, signs in, enters the terminal code, and approves
+access. The CLI stores the key in the system keychain; CLI commands and Python
+`Client()` automatically use it for that API URL. Do not approve access on the
+user's behalf. Install `betflux` separately in the project's Python environment
+when using the SDK; `uv tool install` only installs the CLI environment.
 
-**Never print, echo, or write the API key.** Read it from the environment and
-leave it there. If it is missing, tell the user to set `BETFLUX_API_KEY` — do
-not ask them to paste it into the conversation.
+For headless hosts, the user can choose `betflux login --no-browser
+--credential-store file`, then approve in a browser. Existing explicit credentials
+(`BETFLUX_API_KEY`, `--api-key-file`, or `Client(api_key=...)`) remain supported
+and take precedence over saved login. Raw HTTP callers need an explicitly
+configured key; browser login does not export an environment variable.
+
+**Never print, echo, or copy the API key into the conversation.** Let the CLI or
+SDK read saved credentials; do not inspect keychain entries or credential files.
+For automation, have the user configure `BETFLUX_API_KEY` securely outside chat.
+Manual keys are available at <https://betflux.ai/account/api-keys>.
 
 ## Query behavior
 
@@ -41,6 +57,11 @@ end mid-game or mid-date; do not treat a limited sample as a complete period.
 Start with one game or day to confirm the shape before widening the query.
 `sportsbook-lines` and `game-state-timeline` support `--game` only.
 
+A game that has not settled yet has no final `sportsbook-lines` file. `get`
+still returns its rows — assembled from the live feed — and prints a
+`provisional:` line on stderr. Say so when reporting such rows: the final
+build may revise them.
+
 ## Workflow
 
 ```bash
@@ -49,6 +70,7 @@ betflux datasets                                       # what's available
 betflux games --league NBA --date-from 2026-04-01 --date-to 2026-04-07
 betflux get closing-lines --game NBA_GSW_MIA_20260401  # one game first
 betflux get closing-lines --league NBA --date-from 2026-04-01 --date-to 2026-04-07
+betflux live-board MLB_WAS_DET_20260922                # in-progress game: current prices
 ```
 
 ## Datasets
@@ -60,7 +82,21 @@ betflux get closing-lines --league NBA --date-from 2026-04-01 --date-to 2026-04-
 | `sportsbook-lines` | every change-only line observation | **~190k** | `--game` only |
 | `game-state-timeline` | flat `ts` / `field` / `value` / `source` observations | thousands | `--game` only |
 
-`market-results` and `game-state-timeline` do not cover NCAAM.
+An unsettled game's `sportsbook-lines` is served live: `get` assembles it,
+`betflux live-board GAME` shows what each operator is quoting now, and
+`betflux live-tail GAME` follows new lines until interrupted. Live rows are
+provisional. Live listings are free and each live row is charged once per
+account per month, however often it is read: a repeated `get` on a live game
+is charged only for rows published since, and a `live-tail` poll only for the
+rows it brings in (both still re-download bytes). Keep `--every` at 5 s or more
+(the API's cache; faster re-downloads the same bytes), and resume a tail with
+`--cursor` (printed when it stops) or start one with `--from-now` — a bare
+rerun backfills the whole history.
+
+`market-results` includes NCAAM with beta grading limits: box-score facts are
+available, but MSF play-by-play is absent; missing facts and unsupported
+questions remain `INDETERMINATE`. NCAAM overtime and operator rules are not
+comprehensively verified. `game-state-timeline` does not cover NCAAM.
 
 Per-dataset columns and the exact filter list: `references/datasets/*.md`.
 
@@ -87,7 +123,7 @@ front, before any download.
 |---|---|
 | `--league`, `--operator`, `--market-type`, `--team` | the three lines datasets |
 | `--side` | the three lines datasets |
-| `--player-id` | `closing-lines`, `sportsbook-lines` |
+| `--player-id` | `closing-lines`, `market-results`, `sportsbook-lines` |
 | `--outcome` (`WON`, `LOST`, `PUSH`, `INDETERMINATE`) | `market-results` |
 | `--field`, `--source` | `game-state-timeline` |
 
@@ -113,9 +149,9 @@ yourself; it keeps the transcript small. Timestamps generally render as ISO 8601
 
 | Status | Meaning | What to do |
 |---|---|---|
-| 401 | key missing, malformed, or unrecognized | check `BETFLUX_API_KEY` is set and unabridged |
+| 401 | key missing, malformed, or unrecognized | check for an explicit credential override; have the user sign in with `betflux login` if no valid saved login exists |
 | 402 | access unavailable for this key | report the API's error details; do not retry |
-| 403 | key revoked or suspended | user must mint a new key; do not retry |
+| 403 | key revoked or suspended | user must resolve account access and replace the revoked key; do not retry |
 | 429 | request rejected by a service limit | respect `Retry-After`; if the client surfaces an error, report it rather than looping |
 | 404 | unknown game, dataset, or league not covered | verify with `betflux games` / `betflux datasets` |
 
@@ -148,4 +184,4 @@ Read these only when the task needs them.
 - **[references/http-api.md](references/http-api.md)** — raw endpoints, for non-Python callers
 - **[references/recipes.md](references/recipes.md)** — worked examples: CLV, line movement, backtest frames
 
-Docs: <https://betflux.ai/developer>
+Docs: <https://betflux.ai/docs>

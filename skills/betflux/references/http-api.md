@@ -17,6 +17,10 @@ For non-Python callers. Every `/v1` request needs `Authorization: Bearer bfx_liv
 | `GET` | `/v1/games` | List games with league, ET date-range, team, and status filters. |
 | `GET` | `/v1/games/{game_id}` | Fetch a single game by public id. |
 | `GET` | `/v1/games/{game_id}/{dataset}` | Download a dataset's per-game Parquet artifact. |
+| `GET` | `/v1/games/{game_id}/sportsbook-lines/segments` | List a live game's line segments (manifest + position cursor). |
+| `GET` | `/v1/games/{game_id}/sportsbook-lines/segments/{seq}` | Download one live segment's Parquet. |
+| `GET` | `/v1/games/{game_id}/sportsbook-lines/board` | List a live game's current board files. |
+| `GET` | `/v1/games/{game_id}/sportsbook-lines/board/{operator}` | Download one operator's live board Parquet. |
 | `GET` | `/v1/me` | Inspect the calling API key. |
 
 ## Payloads

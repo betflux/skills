@@ -57,7 +57,10 @@ betflux get market-results \
 no trusted source could settle that exact question — it is not a loss, and
 dropping those rows silently will bias any hit-rate you compute.
 
-`market-results` does not cover NCAAM.
+`market-results` includes NCAAM with beta grading limits. Box-score facts are
+available, but MSF play-by-play is absent. Missing facts and unsupported
+questions remain `INDETERMINATE`; NCAAM overtime and operator rules are not
+comprehensively verified.
 
 ## Model-ready frames
 
@@ -72,6 +75,15 @@ with Client() as bf:
     rows = bf.market_results.rows(
         league="NBA", date_from="2026-04-01", date_to="2026-04-01",
     )
+
+# Require a real pre-game close. The timestamp check also protects reads of
+# historical v2 artifacts while the v3 rebuild and serving cutover complete.
+priced_rows = [
+    row for row in rows
+    if row["closing_odds"] is not None
+    and row["closing_ts"] is not None
+    and row["closing_ts"] < row["game_start"]
+]
 ```
 
 - `Y` — `outcome` mapped to `{WON: 1, LOST: 0}`, `PUSH`/`INDETERMINATE` dropped
@@ -79,6 +91,11 @@ with Client() as bf:
 - `O` — `closing_odds` (or `opening_odds` if you are modelling the open)
 - `X` — join `game-state-timeline` per game for in-play state, or bring your own
   features
+
+Live-only selections remain graded, but their v3 `closing_odds`,
+`closing_implied`, and `closing_ts` are null. Use `priced_rows` for
+closing-price ROI or model evaluation; do not treat a missing close as zero
+odds or drop it from outcome-only grading summaries.
 
 Fetch one day first and confirm the join before widening the range. A full
 season across all leagues is a large download.

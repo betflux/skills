@@ -9,8 +9,8 @@ filters, and work with Parquet files through the CLI, Python SDK, or HTTP API.
 
 ## Installing
 
-Works with any agent that supports the Agent Skills standard — Claude Code,
-Codex, Cursor, OpenCode, Copilot, Gemini CLI, and others.
+Works with any agent that supports the Agent Skills standard — Codex,
+Claude Code, Cursor, OpenCode, Copilot, Gemini CLI, and others.
 
 ### From the betflux CLI
 
@@ -18,8 +18,9 @@ Install the BetFlux CLI, then run the command for each agent you use:
 
 ```bash
 pip install betflux        # or: uv tool install betflux
-betflux plugin install --claude
+betflux login
 betflux plugin install --codex
+betflux plugin install --claude
 # Cursor setup instructions: betflux plugin install --cursor
 ```
 
@@ -86,10 +87,15 @@ Copy `skills/betflux/` into your agent's skill directory:
 |---|---|
 | `betflux` | Querying closing lines, graded market results, full line history, and game state timelines |
 
-## Getting a key
+## Authentication
 
-The skill needs `BETFLUX_API_KEY` set in the environment. Mint one at
-<https://betflux.ai/account/api-keys>.
+Run `betflux login`, enter the terminal code in the browser, and approve access. CLI commands and Python `Client()` will automatically
+use the saved key for that API URL. Verify with `betflux keys check`.
+
+For headless hosts, use `betflux login --no-browser --credential-store file`.
+For automation or raw HTTP, configure `BETFLUX_API_KEY` securely outside chat;
+manual keys remain available at <https://betflux.ai/account/api-keys>.
+Install the SDK separately in your Python project when the CLI uses `uv tool`.
 
 ### ChatGPT and Codex plugins
 
@@ -98,7 +104,7 @@ Agent Plugins 1.0 manifest at `plugin.json`, alongside Claude and Cursor
 manifests. All formats share `skills/betflux/`.
 
 This is a skills-only plugin: it requires a shell/Python environment with
-network access and `BETFLUX_API_KEY` supplied outside the conversation. It
+network access and saved login or an explicit key configured outside the conversation. It
 does not add an MCP server or a hosted connection to the API. Hosts without
 those capabilities can use the skill to prepare commands for you to run.
 
@@ -113,7 +119,7 @@ Claude Code marketplace installation above uses this repository directly.
 ## Source
 
 This directory is generated from the private `bet-data` monorepo and mirrored
-here on release. File issues at <https://betflux.ai/developer> or in the
+here on release. File issues at <https://betflux.ai/docs> or in the
 BetFlux Discord; pull requests against this repository are not merged upstream.
 
-Docs: <https://betflux.ai/developer>
+Docs: <https://betflux.ai/docs>

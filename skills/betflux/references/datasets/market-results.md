@@ -6,11 +6,11 @@ The market results dataset · 29 columns · hundreds of rows per game
 
 | | |
 |---|---|
-| Leagues | MLB, NBA, NHL, NFL |
+| Leagues | MLB, NBA, NHL, NFL, NCAAM |
 | Addressing | date range **or** `--game` |
-| Filters | `league`, `operator`, `market_type`, `team`, `side`, `outcome` |
+| Filters | `league`, `operator`, `market_type`, `team`, `side`, `outcome`, `player_id` |
 
-> Only 5 of 29 columns carry descriptions — this dataset's row
+> Only 8 of 29 columns carry descriptions — this dataset's row
 > schema is declared as column tuples rather than described fields. Types
 > and nullability below are authoritative; a blank description means not
 > yet written, not "no meaning".
@@ -40,10 +40,10 @@ The market results dataset · 29 columns · hundreds of rows per game
 | `selection_metric` | `string` | yes |  |
 | `market_player_ids` | `string[]` | yes |  |
 | `selection_player_ids` | `string[]` | yes |  |
-| `closing_odds` | `integer` | no |  |
-| `closing_implied` | `number` | no |  |
-| `closing_ts` | `string` | no | UTC timestamp (Parquet timestamptz). |
-| `outcome` | `string` | no |  |
+| `closing_odds` | `integer` | yes | American odds of the last eligible active quote strictly before game_start; null when no eligible pre-game quote exists. |
+| `closing_implied` | `number` | yes | Implied probability (vig included, 0-1) of the last eligible active quote strictly before game_start; null when no eligible pre-game quote exists. |
+| `closing_ts` | `string` | yes | Timestamp of the last eligible active quote strictly before game_start; null when no eligible pre-game quote exists. |
+| `outcome` | `string` | no | WON, LOST, PUSH (stake returned), or INDETERMINATE. Tied leaders in most-stat markets are INDETERMINATE while fractional settlement is unsupported. |
 | `settled_value` | `number` | yes |  |
 | `settled_value_bool` | `integer` | yes |  |
 | `graded_at` | `string` | no | UTC timestamp (Parquet timestamptz). |
