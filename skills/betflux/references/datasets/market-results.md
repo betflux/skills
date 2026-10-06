@@ -2,15 +2,15 @@
 
 # market-results
 
-The market results dataset · 29 columns · hundreds of rows per game
+The market results dataset · 31 columns · ~12,000 rows per game
 
 | | |
 |---|---|
-| Leagues | MLB, NBA, NHL, NFL, NCAAM |
+| Leagues | MLB, NBA, NHL, NFL, NCAAM, NCAAF |
 | Addressing | date range **or** `--game` |
-| Filters | `league`, `operator`, `market_type`, `team`, `side`, `outcome`, `player_id` |
+| Filters | `league`, `operator`, `market_type`, `team`, `mainline`, `side`, `outcome`, `player_id` |
 
-> Only 8 of 29 columns carry descriptions — this dataset's row
+> Only 10 of 31 columns carry descriptions — this dataset's row
 > schema is declared as column tuples rather than described fields. Types
 > and nullability below are authoritative; a blank description means not
 > yet written, not "no meaning".
@@ -48,3 +48,5 @@ The market results dataset · 29 columns · hundreds of rows per game
 | `settled_value_bool` | `integer` | yes |  |
 | `graded_at` | `string` | no | UTC timestamp (Parquet timestamptz). |
 | `market_key` | `string` | no | Global market identity: `OPERATOR:market_external_id` — the operator code plus the operator's own market id. Join key across closing-lines, market-results and sportsbook-lines. |
+| `is_mainline` | `boolean` | yes | True when the graded selection belongs to the operator's primary (non-alternate) full-game spread, moneyline or total at its closing quote. Period lines, team totals and props are false. Null on games built before v5. |
+| `dataset_version` | `string` | yes | Version of the dataset this game's file was built at, e.g. `v5`. Games in one pull can differ: versions of a compatibility line only add columns or carry documented changes (see `versions` on /v1/datasets). Columns added after a game's version read null for it. Files built before this column existed lack it entirely (null when read with DuckDB `union_by_name = true`); the `X-Betflux-Dataset-Version` response header still names their version. |

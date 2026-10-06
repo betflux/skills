@@ -26,7 +26,7 @@ Credentials are resolved in order: `--api-key`, `BETFLUX_API_KEY`,
 Opens the browser and prints a URL and code. The user
 signs in, enters the code, and approves access. Saves a new installation key in
 the system keychain for CLI commands and Python `Client()`. Existing saved login
-is reused without creating another key. Onboarding and plan key limits apply.
+is reused without creating another key. Onboarding and account key limits apply.
 
 - `--no-browser`: print the link without opening a browser.
 - `--credential-store keyring|file`: default `keyring`; explicitly select `file`
@@ -72,13 +72,13 @@ Validates the key and reports the API's account metadata.
 
 ### `betflux datasets [--format]`
 
-Lists datasets with title, leagues, column count, and `history_sensitive`. No
+Lists datasets with title, leagues, and column count. No
 auth needed. The table view flattens the nested column list; `--format json`
 or `record` keeps the full detail.
 
 ### `betflux games`
 
-Lists games and their public ids as JSON reference data.
+Lists games and their ids as JSON reference data.
 
 | Option | Notes |
 |---|---|
@@ -86,7 +86,7 @@ Lists games and their public ids as JSON reference data.
 | `--date-from`, `--date-to` | Inclusive ET game date, `YYYY-MM-DD` |
 | `--team` | Canonical team name; matches home or away |
 | `--status` | `SCHEDULED`, `STARTED`, `COMPLETED` |
-| `--id` | Fetch one game by public id or UUID instead of listing |
+| `--id` | Fetch one game by id instead of listing |
 | `--format`, `--columns` | Output control |
 
 `--id` is exclusive: pairing it with any filter is an error.
@@ -177,7 +177,7 @@ settles, pointing at
 | Option | Notes |
 |---|---|
 | `--every N` | Seconds between polls, default `5.0`; the API caches live listings for 5 s, so anything faster re-downloads the same bytes |
-| `--cursor SEQ:ROWS` | Resume from the position the previous tail printed when it stopped, instead of backfilling |
+| `--cursor CURSOR` | Resume from the cursor the previous tail printed when it stopped (e.g. `v5:3:1200`), instead of backfilling |
 | `--from-now` | Take the current position from one free listing and follow only rows published after it |
 | `--output PATH` | Append new rows to a file instead of printing them; resume with `--cursor` so the file holds the history once |
 | `--columns`, `--format` | As `get`, except `--format` defaults to `jsonl` — rows arrive per poll — and `json` is refused (an array per poll is not one document) |
@@ -185,7 +185,9 @@ settles, pointing at
 Ctrl-C is the normal way to end it and exits 0, not 130; the line it prints
 carries the cursor reached. A live log rebuilt under the cursor (409
 `live-cursor-reset`) ends the tail with exit 1 — restart without `--cursor`,
-or with `--from-now`; rows already written may be superseded. A poll whose
+or with `--from-now`; rows already written may be superseded. A dataset
+version bump rebuilds every in-flight game's live log at the new version, so
+a cursor from the old version ends the tail the same way. A poll whose
 listing and segment bodies keep disagreeing prints a `note:` and polls again
 with the cursor unchanged.
 

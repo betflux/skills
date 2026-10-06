@@ -6,7 +6,7 @@ description: Discover and query BetFlux sportsbook datasets through its CLI, Pyt
 # BetFlux
 
 Normalized US sportsbook odds, served as per-game Parquet files. Leagues: NFL,
-NBA, MLB, NHL, NCAAM. Operators include FanDuel, DraftKings, Caesars, BetMGM,
+NBA, MLB, NHL, NCAAM. The audited odds history includes FanDuel, DraftKings, BetMGM,
 and Pinnacle.
 
 ## Setup
@@ -62,6 +62,15 @@ still returns its rows — assembled from the live feed — and prints a
 `provisional:` line on stderr. Say so when reporting such rows: the final
 build may revise them.
 
+## Historical coverage
+
+Before choosing a historical date range, read
+[references/coverage.md](references/coverage.md) for the verified start date,
+season/phase, and NFL week **by league and operator**. Dates refer to game dates
+in US Eastern. Do not assume an operator covers a league from that league's
+first date, or that retained source data guarantees a downloadable artifact.
+Discover games and confirm the requested dataset.
+
 ## Workflow
 
 ```bash
@@ -77,10 +86,13 @@ betflux live-board MLB_WAS_DET_20260922                # in-progress game: curre
 
 | Dataset | Grain | Rows/game | Addressing |
 |---|---|---|---|
-| `closing-lines` | one row per selection, final price | hundreds | range **or** `--game` |
-| `market-results` | closing lines + graded outcome | hundreds | range **or** `--game` |
+| `closing-lines` | one row per (operator, market, selection, side) | ≈ 12,000 | range **or** `--game` |
+| `market-results` | closing lines + graded outcome | ≈ 12,000 | range **or** `--game` |
 | `sportsbook-lines` | every change-only line observation | **~190k** | `--game` only |
-| `game-state-timeline` | flat `ts` / `field` / `value` / `source` observations | thousands | `--game` only |
+| `game-state-timeline` | flat `ts` / `field` / `value` / `source` observations | varies | `--game` only |
+
+Row counts are sizing estimates and vary by league, operators, and market
+coverage; local filters do not reduce the downloaded artifact's row count.
 
 An unsettled game's `sportsbook-lines` is served live: `get` assembles it,
 `betflux live-board GAME` shows what each operator is quoting now, and
@@ -93,18 +105,18 @@ rows it brings in (both still re-download bytes). Keep `--every` at 5 s or more
 `--cursor` (printed when it stops) or start one with `--from-now` — a bare
 rerun backfills the whole history.
 
-`market-results` includes NCAAM with beta grading limits: box-score facts are
-available, but MSF play-by-play is absent; missing facts and unsupported
-questions remain `INDETERMINATE`. NCAAM overtime and operator rules are not
-comprehensively verified. `game-state-timeline` does not cover NCAAM.
+`market-results` includes NCAAM and NCAAF with beta grading limits:
+box-score facts are available, but play-by-play is absent; missing facts and unsupported
+questions remain `INDETERMINATE`. College overtime and operator rules are not
+comprehensively verified. `game-state-timeline` does not cover NCAAM or NCAAF.
 
 Per-dataset columns and the exact filter list: `references/datasets/*.md`.
 
 ## Game ids
 
 `LEAGUE_AWAY_HOME_YYYYMMDD` — away team first, date in **US Eastern**, `_2`
-suffix for the second game of a doubleheader. Case-insensitive. Internal UUIDs
-work anywhere a game id does.
+suffix for the second game of a doubleheader. Case-insensitive. Use the
+game id returned by `betflux games`.
 
 ```
 NBA_GSW_MIA_20260401
@@ -150,8 +162,8 @@ yourself; it keeps the transcript small. Timestamps generally render as ISO 8601
 | Status | Meaning | What to do |
 |---|---|---|
 | 401 | key missing, malformed, or unrecognized | check for an explicit credential override; have the user sign in with `betflux login` if no valid saved login exists |
-| 402 | access unavailable for this key | report the API's error details; do not retry |
-| 403 | key revoked or suspended | user must resolve account access and replace the revoked key; do not retry |
+| 402 `subscription-required` | key valid, but account has no active subscription | report the response details and `upgrade_url`; retry only after account access is restored |
+| 403 `key-disabled` | key revoked or suspended | user must resolve account access and replace the revoked key; do not retry |
 | 429 | request rejected by a service limit | respect `Retry-After`; if the client surfaces an error, report it rather than looping |
 | 404 | unknown game, dataset, or league not covered | verify with `betflux games` / `betflux datasets` |
 
@@ -175,6 +187,7 @@ with Client() as bf:
 
 Read these only when the task needs them.
 
+- **[references/coverage.md](references/coverage.md)** — league/operator start dates, seasons, NFL weeks, and source-history limits
 - **[references/datasets/closing-lines.md](references/datasets/closing-lines.md)** — columns, filters, coverage
 - **[references/datasets/market-results.md](references/datasets/market-results.md)** — graded outcomes and settlement columns
 - **[references/datasets/sportsbook-lines.md](references/datasets/sportsbook-lines.md)** — full line history

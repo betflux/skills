@@ -57,9 +57,9 @@ betflux get market-results \
 no trusted source could settle that exact question — it is not a loss, and
 dropping those rows silently will bias any hit-rate you compute.
 
-`market-results` includes NCAAM with beta grading limits. Box-score facts are
-available, but MSF play-by-play is absent. Missing facts and unsupported
-questions remain `INDETERMINATE`; NCAAM overtime and operator rules are not
+`market-results` includes NCAAM and NCAAF with beta grading limits.
+Box-score facts are available, but play-by-play is absent. Missing facts and unsupported
+questions remain `INDETERMINATE`; college overtime and operator rules are not
 comprehensively verified.
 
 ## Model-ready frames

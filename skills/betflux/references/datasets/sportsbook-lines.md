@@ -2,17 +2,17 @@
 
 # sportsbook-lines
 
-The sportsbook lines dataset · 72 columns · ~190,000 rows per game
+The sportsbook lines dataset · 74 columns · ~190,000 rows per game
 
 | | |
 |---|---|
-| Leagues | MLB, NBA, NHL, NFL, NCAAM |
+| Leagues | MLB, NBA, NHL, NFL, NCAAM, NCAAF |
 | Addressing | `--game` only |
-| Filters | `league`, `operator`, `market_type`, `team`, `side`, `player_id` |
+| Filters | `league`, `operator`, `market_type`, `team`, `mainline`, `side`, `player_id` |
 
 > Addressed one game at a time.
 
-> Only 10 of 72 columns carry descriptions — this dataset's row
+> Only 12 of 74 columns carry descriptions — this dataset's row
 > schema is declared as column tuples rather than described fields. Types
 > and nullability below are authoritative; a blank description means not
 > yet written, not "no meaning".
@@ -93,3 +93,5 @@ The sportsbook lines dataset · 72 columns · ~190,000 rows per game
 | `logit_fair_decimal` | `number` | yes |  |
 | `logit_shift` | `number` | yes |  |
 | `market_key` | `string` | yes | Global market identity: `OPERATOR:market_external_id` — the operator code plus the operator's own market id. Join key across closing-lines, market-results and sportsbook-lines. Always populated from v3 on. |
+| `is_mainline` | `boolean` | yes | True when the row is the operator's primary (non-alternate) full-game spread, moneyline or total — the headline line, not a rung of the alternate ladder. Period lines, team totals and props are false. Decided per snapshot from the operator's own signal, so a book that re-points its headline slot as the line moves flips it between rows. Null on games built before v6. |
+| `dataset_version` | `string` | yes | Version of the dataset this game's file was built at, e.g. `v5`. Games in one pull can differ: versions of a compatibility line only add columns or carry documented changes (see `versions` on /v1/datasets). Columns added after a game's version read null for it. Files built before this column existed lack it entirely (null when read with DuckDB `union_by_name = true`); the `X-Betflux-Dataset-Version` response header still names their version. |

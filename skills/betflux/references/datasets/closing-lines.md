@@ -2,20 +2,20 @@
 
 # closing-lines
 
-The closing lines dataset · 42 columns · hundreds of rows per game
+The closing lines dataset · 44 columns · ~12,000 rows per game
 
 | | |
 |---|---|
-| Leagues | MLB, NBA, NHL, NFL, NCAAM |
+| Leagues | MLB, NBA, NHL, NFL, NCAAM, NCAAF |
 | Addressing | date range **or** `--game` |
-| Filters | `league`, `operator`, `market_type`, `team`, `side`, `player_id` |
+| Filters | `league`, `operator`, `market_type`, `team`, `mainline`, `side`, `player_id` |
 
 ## Columns
 
 | Column | Type | Nullable | Description |
 |---|---|---|---|
-| `game_id` | `string` | no | Public game id: LEAGUE_AWAY_HOME_YYYYMMDD (ET date; `_2` suffix for the second game of a doubleheader). |
-| `league` | `string` | no | League code, e.g. NBA, NFL, MLB, NHL, NCAAM. |
+| `game_id` | `string` | no | Game id: LEAGUE_AWAY_HOME_YYYYMMDD (ET date; `_2` suffix for the second game of a doubleheader). |
+| `league` | `string` | no | League code, e.g. NBA, NFL, MLB, NHL, NCAAM, NCAAF. |
 | `game_date` | `string` | no | Calendar date of the scheduled start in US Eastern time (YYYY-MM-DD). |
 | `game_start` | `string` | no | Scheduled start time, ISO-8601 UTC. |
 | `home_team` | `string` | no | Canonical home team name. |
@@ -56,3 +56,5 @@ The closing lines dataset · 42 columns · hundreds of rows per game
 | `market_external_id` | `string` | no | Operator's market id — the identity of the market within (game, operator); `market_key` is `operator` + `:` + this value. Same value as `market_external_id` on market-results and sportsbook-lines. |
 | `market_name` | `string` | yes | Operator's market label, e.g. `Run Line Alternate`; display only. |
 | `selection_external_id` | `string` | no | Operator's selection id — the row identity together with `market_key` and `side`. For FanDuel main markets it is stable and the line moves on it (one row, opening → closing). DraftKings, BetMGM, Pinnacle and FanDuel alternates mint a new id per line value, so one market carries several rows per side and a moved line is a new row with opening == closing. |
+| `is_mainline` | `boolean` | yes | True when the selection belongs to the operator's primary (non-alternate) full-game spread, moneyline or total as of the closing quote — the headline line, not a rung of the alternate ladder. Period lines, team totals and props are false. Null on games built before v7. |
+| `dataset_version` | `string` | yes | Version of the dataset this game's file was built at, e.g. `v5`. Games in one pull can differ: versions of a compatibility line only add columns or carry documented changes (see `versions` on /v1/datasets). Columns added after a game's version read null for it. Files built before this column existed lack it entirely (null when read with DuckDB `union_by_name = true`); the `X-Betflux-Dataset-Version` response header still names their version. |

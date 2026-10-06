@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5 — 2026-10-03
+
+- Document the `is_mainline` column and the Python `mainline=True` filter on
+  the three lines datasets.
+
 ## 0.1.4 — 2026-09-25
 
 - Use saved credentials from `betflux login` for CLI commands and Python

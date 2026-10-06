@@ -74,8 +74,7 @@ filters also narrow game discovery on range queries.
 ### Types
 
 Timestamp and date columns come back as Python `datetime` / `date` objects —
-pyarrow decodes the Parquet types — **not** ISO strings. Plan comparisons
-accordingly.
+pyarrow decodes the Parquet types — **not** ISO strings. Compare these values using their native Python types.
 
 One exception: `game-state-timeline`'s `ts` is a plain **int64 of epoch
 milliseconds (UTC)**, not a native timestamp. Convert it yourself.
@@ -84,7 +83,8 @@ milliseconds (UTC)**, not a native timestamp. Convert it yourself.
 
 Passed as keyword arguments; evaluated locally after download. A filter naming
 a column the dataset lacks raises `ValueError` **before** fetching. `team` matches home or away; `player_id` matches the
-market/selection player-id list columns.
+market/selection player-id list columns; `mainline=True` keeps only the operator's primary full-game
+spread / moneyline / total (`is_mainline`; pre-flag NULL rows never match).
 
 `query_game()` returns a hint alongside the rows when a filter excluded
 everything — it names the offending filter and sample values it did see. Use it
@@ -97,7 +97,8 @@ Common errors subclass `BetfluxError`; catch that base class for other API failu
 | Exception | Cause |
 |---|---|
 | `AuthError` | 401 — key missing, malformed, unrecognized |
-| `ForbiddenError` | 403 — key revoked or suspended |
+| `PaymentRequiredError` | 402 `subscription-required` — key valid, but account has no active subscription; response includes `upgrade_url` |
+| `ForbiddenError` | 403 — key revoked or suspended (`key-disabled`) |
 | `NotFoundError` | 404 — unknown game/dataset, or league not covered |
 | `GameLiveError` | 404 `not-final` — the game is still live. A `NotFoundError` subclass; the dataset methods handle it for you |
 | `LiveCursorResetError` | 409 — the live log was rebuilt under the cursor; start over without one |
@@ -126,7 +127,7 @@ looping `game()` on a live game, poll:
 cursor = None                     # or bf.sportsbook_lines.live_cursor(game_id): skip the history
 while True:
     step = bf.sportsbook_lines.live_segments(game_id, cursor)
-    cursor = step.cursor          # "0:0" until a first segment exists
+    cursor = step.cursor          # e.g. "v5:0:0" until a first segment exists
     handle(step.rows)             # what is new; also step.table (pyarrow)
     time.sleep(5)                 # listings are edge-cached for 5 s
 ```
@@ -165,4 +166,13 @@ betflux get closing-lines --game NBA_GSW_MIA_20260401 --output closing.parquet
 
 ```sql
 SELECT * FROM read_parquet('closing.parquet');
+```
+
+Files for different games can be built at different versions of a dataset's
+compatibility line: newer versions only add columns or carry a change
+documented under `versions` in `betflux datasets`. Read several files with
+`union_by_name`, and check `dataset_version` before comparing across games:
+
+```sql
+SELECT dataset_version, count(*) FROM read_parquet('closing-*.parquet', union_by_name = true) GROUP BY 1;
 ```

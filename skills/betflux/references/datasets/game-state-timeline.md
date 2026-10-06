@@ -2,7 +2,7 @@
 
 # game-state-timeline
 
-The state timeline dataset · 7 columns · thousands of rows per game
+The state timeline dataset · 8 columns · a variable number of rows per game
 
 | | |
 |---|---|
@@ -16,10 +16,11 @@ The state timeline dataset · 7 columns · thousands of rows per game
 
 | Column | Type | Nullable | Description |
 |---|---|---|---|
-| `game_id` | `string` | no | Public game id: LEAGUE_AWAY_HOME_YYYYMMDD (ET date; `_2` suffix for the second game of a doubleheader). |
+| `game_id` | `string` | no | Game id: LEAGUE_AWAY_HOME_YYYYMMDD (ET date; `_2` suffix for the second game of a doubleheader). |
 | `league` | `string` | no | League code, e.g. NBA, NFL, MLB, NHL. |
 | `game_date` | `string` | no | Calendar date of the scheduled start in US Eastern time (Parquet date, YYYY-MM-DD). |
 | `ts` | `integer` | no | Observation timestamp, epoch milliseconds UTC (int64; renamed from the gold column ts_ms). |
 | `field` | `string` | no | Stable snake_case state field, e.g. home_score, period, clock. |
 | `value` | `string` | yes | Observed value, stringified; null when the field was cleared. |
-| `source` | `string` | no | Observation source, e.g. MSF or a sportsbook operator code. |
+| `source` | `string` | no | Observation source: a stats-feed or sportsbook operator code. |
+| `dataset_version` | `string` | yes | Version of the dataset this game's file was built at, e.g. `v5`. Games in one pull can differ: versions of a compatibility line only add columns or carry documented changes (see `versions` on /v1/datasets). Columns added after a game's version read null for it. Files built before this column existed lack it entirely (null when read with DuckDB `union_by_name = true`); the `X-Betflux-Dataset-Version` response header still names their version. |
