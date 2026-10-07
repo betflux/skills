@@ -78,7 +78,14 @@ or `record` keeps the full detail.
 
 ### `betflux games`
 
-Lists games and their ids as JSON reference data.
+Lists games — the id plus the full game record: schedule (`start_time`,
+`status`, `season`, `week`, `broadcasters`), both teams, the score
+(`home_score`, `away_score`, `current_period`, `current_period_seconds_remaining`,
+`period_scores_home/away`), the venue (`venue_name`, `venue_city`,
+`venue_latitude/longitude`, `venue_capacity`, `venue_surface`,
+`venue_has_roof`) and game-time weather (`weather_type`,
+`weather_temperature_f`, `weather_wind_speed_mph`, `weather_precipitation_type`, …).
+Every field beyond the teams and schedule is nullable.
 
 | Option | Notes |
 |---|---|
@@ -87,9 +94,12 @@ Lists games and their ids as JSON reference data.
 | `--team` | Canonical team name; matches home or away |
 | `--status` | `SCHEDULED`, `STARTED`, `COMPLETED` |
 | `--id` | Fetch one game by id instead of listing |
-| `--format`, `--columns` | Output control |
+| `--format`, `--columns`, `--wide` | Output control; the default table is a curated subset, `--wide` shows every column |
 
-`--id` is exclusive: pairing it with any filter is an error.
+`--id` is exclusive: pairing it with any filter is an error. For one game's
+whole record use `--id <id> --format record`. The record is current state
+(latest score, status, roster), not history — see
+[reference-data.md](reference-data.md).
 
 ### `betflux leagues` / `betflux teams` / `betflux players`
 

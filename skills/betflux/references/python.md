@@ -37,6 +37,13 @@ bf.datasets()
 bf.check_key()
 ```
 
+Rows are plain dicts. A game carries its id, schedule (`start_time`, `status`,
+`season`, `week`), both teams, the score (`home_score`, `away_score`,
+`current_period`, `period_scores_home/away`), venue (`venue_*`) and game-time
+weather (`weather_*`); the venue and weather fields are null when unknown
+(indoor games, pre-game). Every reference row is current state, not history —
+columns and the rule are in [reference-data.md](reference-data.md).
+
 ### Datasets
 
 Handles hang off the client — `bf.closing_lines`, `bf.market_results`,

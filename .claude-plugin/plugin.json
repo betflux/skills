@@ -1,7 +1,7 @@
 {
   "name": "betflux",
   "description": "Query BetFlux sportsbook odds data — closing lines, graded market results, full line history, and game state timelines for NFL, NBA, MLB, NCAAM, and NHL.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "author": {
     "name": "BetFlux",
     "url": "https://betflux.ai"

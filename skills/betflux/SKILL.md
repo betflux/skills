@@ -94,6 +94,17 @@ betflux live-board MLB_WAS_DET_20260922                # in-progress game: curre
 Row counts are sizing estimates and vary by league, operators, and market
 coverage; local filters do not reduce the downloaded artifact's row count.
 
+## Reference data
+
+`betflux games`, `leagues`, `teams`, `players` (and `bf.games()` etc.) return
+the JSON reference data the datasets key on. A game row is the full game
+record — schedule, teams, score, venue, game-time weather — not just an id.
+It is **current state**: the latest value, refreshed a few times an hour,
+with no earlier values kept. Use it to look a game up, not to reconstruct
+what happened: for a game's state over time use `game-state-timeline`, for
+its odds history `sportsbook-lines`. Columns and filters are in
+[references/reference-data.md](references/reference-data.md).
+
 An unsettled game's `sportsbook-lines` is served live: `get` assembles it,
 `betflux live-board GAME` shows what each operator is quoting now, and
 `betflux live-tail GAME` follows new lines until interrupted. Live rows are
@@ -192,6 +203,7 @@ Read these only when the task needs them.
 - **[references/datasets/market-results.md](references/datasets/market-results.md)** — graded outcomes and settlement columns
 - **[references/datasets/sportsbook-lines.md](references/datasets/sportsbook-lines.md)** — full line history
 - **[references/datasets/game-state-timeline.md](references/datasets/game-state-timeline.md)** — observation rows, field/source values
+- **[references/reference-data.md](references/reference-data.md)** — leagues, teams, players, games: columns, filters, and the current-state rule
 - **[references/cli.md](references/cli.md)** — every command and flag
 - **[references/python.md](references/python.md)** — `Client`, dataset handles, typed errors, DuckDB
 - **[references/http-api.md](references/http-api.md)** — raw endpoints, for non-Python callers
