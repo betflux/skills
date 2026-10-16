@@ -15,10 +15,10 @@ Both are null when either end is missing.
 
 ```bash
 betflux get closing-lines \
-  --league NBA --date-from 2026-04-01 --date-to 2026-04-07 \
-  --team "Golden State Warriors" \
+  --league NBA --date-from 2026-05-01 --date-to 2026-05-07 \
+  --team "Detroit Pistons" \
   --columns game_date,operator,market_key,side,opening_odds,closing_odds,clv_odds \
-  --format csv > gsw-clv.csv
+  --format csv > det-clv.csv
 ```
 
 ## Line movement within a single game
@@ -27,7 +27,7 @@ betflux get closing-lines \
 It is `--game`-only. Save the Parquet rather than rendering it:
 
 ```bash
-betflux get sportsbook-lines --game NBA_GSW_MIA_20260401 --output movement.parquet
+betflux get sportsbook-lines --game NBA_DET_ORL_20260501 --output movement.parquet
 ```
 
 Then query locally:
@@ -73,7 +73,7 @@ from betflux import Client
 
 with Client() as bf:
     rows = bf.market_results.rows(
-        league="NBA", date_from="2026-04-01", date_to="2026-04-01",
+        league="NBA", date_from="2026-05-01", date_to="2026-05-01",
     )
 
 # Require a real pre-game close. The timestamp check also protects reads of
@@ -103,7 +103,7 @@ season across all leagues is a large download.
 ## Scoreboard state over time
 
 ```bash
-betflux get game-state-timeline --game NBA_GSW_MIA_20260401 --field home_score
+betflux get game-state-timeline --game NBA_DET_ORL_20260501 --field home_score
 ```
 
 Flat observation rows: `ts` / `field` / `value` / `source`. `ts` is an **int64

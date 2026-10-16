@@ -110,3 +110,35 @@ betflux get closing-lines --game NFL_PIT_CIN_20251016 --operator FANDUEL
 The NFL Week 7 label is recorded in the source box score and corroborated by
 [the Bengals' 2025 schedule](https://www.bengals.com/schedule/2025/).
 MLB's first game is [ALCS Game 3 on October 15, 2025](https://www.mlb.com/mariners/video/blue-jays-v-mariners-game-3-highlights-x1251).
+
+## MSF feed history
+
+The MSF datasets have their own history, verified against what the API
+published on **2026-10-16**. Game datasets cover games that started at or after
+**2025-01-01 00:00 UTC** (7 p.m. ET on 2024-12-31); nothing earlier is served,
+and no start below promises a complete season. The first game date (ET) in each
+league:
+
+| League | `game-state`, `player-stats`, `team-stats` | `plays` |
+|---|---|---|
+| NBA | 2024-12-31, evening games only | 2024-12-31, evening games only |
+| NHL | 2024-12-31, evening games only | 2024-12-31, evening games only |
+| NCAAM | 2024-12-31, evening games only | not covered |
+| NFL | 2025-01-04 | 2025-01-04 |
+| MLB | 2025-02-20 | 2025-02-20 |
+
+`betflux games` lists games from before that start. Their MSF datasets answer
+`404` `not-yet-available` and never will be published: for a game that started
+before 2025-01-01 00:00 UTC, read that answer as "not covered", not "wait".
+
+`injuries` starts with its first published observation, 2026-03-20 (UTC), in
+every league.
+
+A league dataset's manifests report the history before its first observation
+as a coverage gap, so every `injuries` revision carries `degraded` coverage and
+`provisional` status. For a league feed, neither word tells one revision from
+another.
+A covered scope with nothing published yet, usually a game that has not
+started, answers `404` with problem type `not-yet-available`. Treat that as
+"not published yet", not as missing coverage to retry: wait for publication.
+See [msf.md](msf.md).

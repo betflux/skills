@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0 — 2026-10-16
+
+- Add the MSF datasets — game state, plays, player stats, team stats and
+  injuries — with snapshot/changes protocol, CLI and SDK references, and
+  one generated page per dataset. They need betflux 0.7.0.
+- Document when each MSF dataset's history starts (games from 2025-01-01
+  00:00 UTC), and that a `404` `not-yet-available` means a game or league has
+  nothing published yet: wait for publication rather than retry, except for a
+  game before that start, which never will be.
+- Document the MSF feeds' current limits: `freshness` is always null, no
+  archives are published, `metric` covers only mapped stats, and the injuries
+  feed mirrors a once-a-day source report that is not a complete list.
+- Move the examples to May 2026, the demo key's sample month.
+
 ## 0.1.6 — 2026-10-07
 
 - Document the game record's score, venue and weather fields on

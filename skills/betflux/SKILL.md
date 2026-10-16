@@ -1,6 +1,6 @@
 ---
 name: betflux
-description: Discover and query BetFlux sportsbook datasets through its CLI, Python SDK, or HTTP API. Use for BetFlux data access, historical odds analysis, closing line value, and dataset exploration.
+description: Discover and query BetFlux sportsbook and MSF game and injury datasets through its CLI, Python SDK, or HTTP API. Use for BetFlux data access, live game state, plays, stats, injuries, historical odds analysis, closing line value, and dataset exploration.
 ---
 
 # BetFlux
@@ -56,6 +56,24 @@ end mid-game or mid-date; do not treat a limited sample as a complete period.
 
 Start with one game or day to confirm the shape before widening the query.
 `sportsbook-lines` and `game-state-timeline` support `--game` only.
+MSF `game-state`, `plays`, `player-stats`, and `team-stats` use one `--game`;
+`injuries` uses one `--league`. They serve current snapshots and complete
+revision feeds, with local filters. They exist only where MSF serving is
+enabled: if `betflux datasets` does not list one, its commands fail with a
+plain 404 (`No route matches …`), exactly as a path that does not exist. They need betflux 0.7.0 or later (`betflux --version`); an
+older CLI rejects them locally even when `betflux datasets` lists them. See
+[references/msf.md](references/msf.md).
+
+MSF data is published game by game (league by league for injuries), each
+from its first observation; the start dates are in
+[references/coverage.md](references/coverage.md#msf-feed-history). A covered
+game or league with nothing published yet, usually a game that has not
+started, answers `404` with problem type `not-yet-available` ("No validated …
+snapshot has been published for this scope"). The request is valid; that scope
+has no data yet. Come back after publication — do not retry the same request in
+a loop. The exception is a game that started before 2025-01-01 00:00 UTC: it is
+listed but never will be published. `live-tail` already waits for a first publication by itself (it prints
+a `waiting:` line each interval).
 
 A game that has not settled yet has no final `sportsbook-lines` file. `get`
 still returns its rows — assembled from the live feed — and prints a
@@ -76,9 +94,9 @@ Discover games and confirm the requested dataset.
 ```bash
 betflux keys check                                     # validate credentials
 betflux datasets                                       # what's available
-betflux games --league NBA --date-from 2026-04-01 --date-to 2026-04-07
-betflux get closing-lines --game NBA_GSW_MIA_20260401  # one game first
-betflux get closing-lines --league NBA --date-from 2026-04-01 --date-to 2026-04-07
+betflux games --league NBA --date-from 2026-05-01 --date-to 2026-05-07
+betflux get closing-lines --game NBA_DET_ORL_20260501  # one game first
+betflux get closing-lines --league NBA --date-from 2026-05-01 --date-to 2026-05-07
 betflux live-board MLB_WAS_DET_20260922                # in-progress game: current prices
 ```
 
@@ -90,6 +108,11 @@ betflux live-board MLB_WAS_DET_20260922                # in-progress game: curre
 | `market-results` | closing lines + graded outcome | ≈ 12,000 | range **or** `--game` |
 | `sportsbook-lines` | every change-only line observation | **~190k** | `--game` only |
 | `game-state-timeline` | flat `ts` / `field` / `value` / `source` observations | varies | `--game` only |
+| `game-state` | latest MSF score, status, clock and period state | one | `--game` only |
+| `plays` | latest complete MSF play set | varies | `--game` only |
+| `player-stats` | game, player and stable stat key | varies | `--game` only |
+| `team-stats` | game, team and stable stat key | varies | `--game` only |
+| `injuries` | league and player injury state | league-wide | `--league` only |
 
 Row counts are sizing estimates and vary by league, operators, and market
 coverage; local filters do not reduce the downloaded artifact's row count.
@@ -130,7 +153,7 @@ suffix for the second game of a doubleheader. Case-insensitive. Use the
 game id returned by `betflux games`.
 
 ```
-NBA_GSW_MIA_20260401
+NBA_DET_ORL_20260501
 MLB_BOS_NYY_20260715_2
 ```
 
@@ -146,9 +169,12 @@ front, before any download.
 |---|---|
 | `--league`, `--operator`, `--market-type`, `--team` | the three lines datasets |
 | `--side` | the three lines datasets |
-| `--player-id` | `closing-lines`, `market-results`, `sportsbook-lines` |
+| `--player-id` | `closing-lines`, `market-results`, `sportsbook-lines`, MSF `player-stats` and `injuries` |
 | `--outcome` (`WON`, `LOST`, `PUSH`, `INDETERMINATE`) | `market-results` |
 | `--field`, `--source` | `game-state-timeline` |
+| `--metric` | `player-stats`, `team-stats`; applies reviewed restatement policy |
+| `--team-id` | MSF `player-stats`, `team-stats` and `injuries` |
+| `--availability` | MSF injuries in `live-tail` |
 
 `--team` matches home **or** away.
 
@@ -162,7 +188,7 @@ are wide.
 - `--format record` — vertical `key: value`, good for one wide row
 - `--format json | jsonl | csv` — machine formats, full fidelity; `jsonl` and
   `csv` stream as each game's file arrives
-- `--output PATH` (with `--game`) — save the raw Parquet, no parsing
+- `--output PATH` — save a final odds artifact with `--game`, or an MSF snapshot as `.parquet`/`.csv` with its game or league scope
 
 Prefer `--columns` plus `--format jsonl` when you intend to process rows
 yourself; it keeps the transcript small. Timestamps generally render as ISO 8601;
@@ -175,8 +201,10 @@ yourself; it keeps the transcript small. Timestamps generally render as ISO 8601
 | 401 | key missing, malformed, or unrecognized | check for an explicit credential override; have the user sign in with `betflux login` if no valid saved login exists |
 | 402 `subscription-required` | key valid, but account has no active subscription | report the response details and `upgrade_url`; retry only after account access is restored |
 | 403 `key-disabled` | key revoked or suspended | user must resolve account access and replace the revoked key; do not retry |
+| 403 `history-restricted` | the request is outside the key's history window; a demo key gets it for any game outside its sample month (May 2026) and for current MSF injuries (`get injuries`, `live-tail --dataset injuries`) | do not retry; stay inside the window (historical injury snapshots and archives in the sample month, see `references/msf.md`) or use a paid key |
 | 429 | request rejected by a service limit | respect `Retry-After`; if the client surfaces an error, report it rather than looping |
-| 404 | unknown game, dataset, or league not covered | verify with `betflux games` / `betflux datasets` |
+| 404 `not-yet-available` | MSF only: nothing has been published yet for that game or league, though `betflux datasets` lists its league | not a bad request and not a reason to loop: wait for publication (a game that started before 2025-01-01 00:00 UTC never will be) |
+| 404 | unknown game, dataset, or league not covered; `No route matches` on an MSF command means MSF serving is not enabled there | verify with `betflux games` / `betflux datasets` |
 
 Errors are RFC 9457 problem+json; inspect the `type` and `detail` fields.
 Do not retry access errors without resolving their cause.
@@ -187,9 +215,9 @@ Do not retry access errors without resolving their cause.
 from betflux import Client
 
 with Client() as bf:
-    games = bf.games(league="NBA", date_from="2026-04-01", date_to="2026-04-07")
+    games = bf.games(league="NBA", date_from="2026-05-01", date_to="2026-05-07")
     rows = bf.closing_lines.game(games[0]["id"], operator="FANDUEL")
-    df = bf.closing_lines.df(league="NBA", date_from="2026-04-01", date_to="2026-04-07")
+    df = bf.closing_lines.df(league="NBA", date_from="2026-05-01", date_to="2026-05-07")
 ```
 
 `df()` over a wide range downloads the selected games before returning. Details in `references/python.md`.
@@ -203,6 +231,12 @@ Read these only when the task needs them.
 - **[references/datasets/market-results.md](references/datasets/market-results.md)** — graded outcomes and settlement columns
 - **[references/datasets/sportsbook-lines.md](references/datasets/sportsbook-lines.md)** — full line history
 - **[references/datasets/game-state-timeline.md](references/datasets/game-state-timeline.md)** — observation rows, field/source values
+- **[references/msf.md](references/msf.md)** — snapshot and revision protocol, CLI and SDK examples
+- **[references/datasets/game-state.md](references/datasets/game-state.md)** — MSF game status and score columns
+- **[references/datasets/plays.md](references/datasets/plays.md)** — complete play snapshots and append/replace revisions
+- **[references/datasets/player-stats.md](references/datasets/player-stats.md)** — player stat keys, values and metric filtering
+- **[references/datasets/team-stats.md](references/datasets/team-stats.md)** — team stat keys, values and metric filtering
+- **[references/datasets/injuries.md](references/datasets/injuries.md)** — league injury state and availability
 - **[references/reference-data.md](references/reference-data.md)** — leagues, teams, players, games: columns, filters, and the current-state rule
 - **[references/cli.md](references/cli.md)** — every command and flag
 - **[references/python.md](references/python.md)** — `Client`, dataset handles, typed errors, DuckDB

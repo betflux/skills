@@ -89,8 +89,8 @@ One row per game: the public `id` every per-game endpoint takes plus the game re
 | | |
 |---|---|
 | Endpoint | `GET /v1/games` · `GET /v1/games/{game_id}` |
-| CLI | `betflux games --league NBA --date-from 2026-04-01 --date-to 2026-04-07` · `betflux games --id <game_id> --format record` |
-| Python | `bf.games(league="NBA", date_from="2026-04-01", date_to="2026-04-07")` · `bf.game("<game_id>")` |
+| CLI | `betflux games --league NBA --date-from 2026-05-01 --date-to 2026-05-07` · `betflux games --id <game_id> --format record` |
+| Python | `bf.games(league="NBA", date_from="2026-05-01", date_to="2026-05-07")` · `bf.game("<game_id>")` |
 | Filters | `league`, `date_from`, `date_to`, `team`, `status` |
 
 | Column | Type | Nullable | Description |

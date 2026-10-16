@@ -115,9 +115,11 @@ Downloads dataset files and returns matching rows.
 | Form | Datasets |
 |---|---|
 | `--date-from` + `--date-to` (+ optional `--league`) | `closing-lines`, `market-results` |
-| `--game <id>` | all four |
+| `--game <id>` | the four original datasets plus MSF `game-state`, `plays`, `player-stats`, `team-stats` |
+| `--league <code>` without `--game` | MSF `injuries` |
 
-`sportsbook-lines` and `game-state-timeline` are `--game`-only.
+`sportsbook-lines`, `game-state-timeline`, and the four MSF game datasets are
+`--game`-only. MSF `injuries` is `--league`-only.
 
 **Filters** (rows are filtered locally after download; team and league also
 narrow game discovery on range queries, reducing downloads):
@@ -128,10 +130,12 @@ narrow game discovery on range queries, reducing downloads):
 | `--market-type` | the three lines datasets |
 | `--team` | the three lines datasets; matches home or away |
 | `--side` | the three lines datasets, e.g. `HOME`, `OVER` |
-| `--player-id` | `closing-lines`, `market-results`, `sportsbook-lines` |
+| `--player-id` | Original line/result datasets, MSF player stats and injuries |
 | `--outcome` | `market-results` only: `WON`, `LOST`, `PUSH`, `INDETERMINATE` |
 | `--field` | `game-state-timeline` only, e.g. `home_score` |
 | `--source` | `game-state-timeline` only, e.g. `draftkings` |
+| `--metric` | MSF player/team stats; applies the reviewed restatement policy |
+| `--team-id` | MSF player/team stats and injuries |
 
 A filter naming a column the dataset lacks is rejected before any download.
 
@@ -140,7 +144,7 @@ A filter naming a column the dataset lacks is rejected before any download.
 | Option | Notes |
 |---|---|
 | `--limit N` | Range queries only: stop after N matching rows. Does not cap downloaded rows; sparse filters can download the entire range |
-| `--output PATH` | With `--game`: save the raw Parquet file, no parsing. Prints one summary line |
+| `--output PATH` | Original datasets: with `--game`, save raw Parquet. MSF snapshots: save `.parquet` or `.csv` for the dataset's game or league scope |
 | `--columns a,b,c` | Override the default projection |
 | `--wide` | Table only: every column instead of the curated subset |
 | `--format` | `table` (default), `record`, `json`, `jsonl`, `csv` |
@@ -148,6 +152,11 @@ A filter naming a column the dataset lacks is rejected before any download.
 
 `jsonl` and `csv` stream rows as each game's file arrives. `record` prints
 vertical `key: value` blocks — the readable choice for a single wide row.
+
+MSF `get` reads the current snapshot; its files carry the frozen public schema.
+`game-state`, `plays`, `player-stats`, `team-stats` and `injuries`
+have separate columns and revision feeds. See [msf.md](msf.md) and the five
+generated dataset pages.
 
 **Live games.** A `sportsbook-lines` game that has not settled has no final
 file; `get` assembles its rows from the live feed and prints
@@ -201,6 +210,38 @@ a cursor from the old version ends the tail the same way. A poll whose
 listing and segment bodies keep disagreeing prints a `note:` and polls again
 with the cursor unchanged.
 
+### MSF revision tail
+
+Use `betflux live-tail GAME --dataset game-state|plays|player-stats|team-stats`,
+or `betflux live-tail --dataset injuries --league NFL` without `GAME`. The
+default dataset remains `sportsbook-lines` for compatibility. MSF output is
+JSONL only: one complete object per revision, including zero-row revisions.
+
+| Option | MSF behavior |
+|---|---|
+| `--cursor CURSOR` | Resume after a snapshot or prior revision cursor |
+| `--from-now` | Read the current snapshot cursor and emit later revisions only |
+| `--every N` | Override the `poll_after` seconds the snapshot or changes listing advises (the default, a resumed tail included) |
+| `--metric`, `--player-id`, `--team-id` | Local stat/injury filters where supported; filters may emit deletes when membership changes |
+| `--availability` | Injury follower only |
+| `--output PATH` | Append complete JSONL revisions and persist `<PATH>.cursor.json` after each synced line |
+
+The same output file must resume with the same dataset, scope and filters.
+Re-run the same command to resume; `--from-now` only chooses where a new output
+starts and is ignored once a checkpoint exists, as is the `--cursor` the output
+started from. A `--cursor` from another stream, or ahead of the checkpoint, is
+refused.
+An incomplete trailing line is discarded on managed resume. A `409`
+(`stream-reset` problem) or `410` (`cursor-expired` problem) requires a new
+snapshot; do not append another epoch to the old file.
+
+Started without `--cursor` on a game or league with nothing published yet
+(`404` `not-yet-available`; see [msf.md](msf.md)), the tail prints
+`waiting: nothing published yet for <scope> <dataset> (…); checking again in
+30s, Ctrl-C to stop` on stderr and retries every poll interval (30 s, 300 s for
+injuries, or `--every`). Any other 404 — an unknown game, an uncovered league —
+ends it with exit 1.
+
 ## Output notes
 
 - Default table shows a curated column subset; the gold datasets are wide.
@@ -211,4 +252,5 @@ with the cursor unchanged.
 ## Exit behavior
 
 Failures print `Error: …` to stderr and exit 1. `BETFLUX_DEBUG=1` adds a
-traceback. Ctrl-C exits 130.
+traceback. Ctrl-C exits 130, except in `live-tail`, where it is the normal way
+to stop and exits 0.

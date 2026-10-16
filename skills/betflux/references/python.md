@@ -31,8 +31,8 @@ Always use it as a context manager, or call `.close()`.
 bf.leagues()
 bf.teams(league="NBA")
 bf.players(league="NBA", team_id=...)
-bf.games(league="NBA", date_from="2026-04-01", date_to="2026-04-07")
-bf.game("NBA_GSW_MIA_20260401")
+bf.games(league="NBA", date_from="2026-05-01", date_to="2026-05-07")
+bf.game("NBA_DET_ORL_20260501")
 bf.datasets()
 bf.check_key()
 ```
@@ -48,7 +48,12 @@ columns and the rule are in [reference-data.md](reference-data.md).
 
 Handles hang off the client — `bf.closing_lines`, `bf.market_results`,
 `bf.sportsbook_lines`, `bf.game_state_timeline` — or `bf.dataset("closing-lines")`
-by public name.
+by public name. An MSF dataset by name is `bf.msf_dataset("game-state")`;
+`bf.dataset()` does not accept MSF names.
+
+MSF handles are `bf.game_state`, `bf.plays`, `bf.player_stats`, `bf.team_stats`
+and `bf.injuries`. They use the snapshot/revision protocol below, rather than
+the settled-artifact methods in this table.
 
 | Method | Returns |
 |---|---|
@@ -66,7 +71,7 @@ by public name.
 
 ```python
 for row in bf.closing_lines.iter(
-    league="NBA", date_from="2026-04-01", date_to="2026-06-30",
+    league="NBA", date_from="2026-05-01", date_to="2026-06-30",
     operator="FANDUEL",     # local filter
     max_rows=10_000,        # matching output rows, not downloaded rows
 ):
@@ -77,6 +82,54 @@ for row in bf.closing_lines.iter(
 `max_rows` is the Python equivalent of `--limit`: it caps matching output rows,
 not downloaded rows. Local filters may match no rows in a file. Team and league
 filters also narrow game discovery on range queries.
+
+### MSF snapshots and changes
+
+The four game handles take a public game ID; `bf.injuries` takes `league=`.
+`snapshot()` returns rows, metadata, a cursor and the downloaded Arrow schema.
+`changes(cursor, ...)` yields a finite sequence of complete revisions through
+the first listing's high-water mark; for a key whose history window ends (the
+demo key's sample month) that mark is its last readable revision.
+`follow()` polls continuously, and waits at that edge. Each
+revision has `metadata`, `rows` and `.cursor`, even when `rows` is empty.
+
+```python
+with Client() as bf:
+    snapshot = bf.player_stats.snapshot("NFL_IND_KC_20260920")
+    for revision in bf.player_stats.changes(snapshot.cursor, "NFL_IND_KC_20260920"):
+        print(revision.metadata["revision"], revision.rows)
+
+    injuries = bf.injuries.snapshot(league="NFL")
+```
+
+Use `follow(..., from_now=True)` to skip baseline output. With filters, the SDK
+still loads the baseline so rows leaving a filter can produce deletes; resuming
+a filtered `follow(cursor=...)` downloads the whole snapshot at the cursor's
+revision and is charged its full row count. It first checks the cursor against
+the dataset and scope and makes one free changes listing, so a cursor for
+another stream (`ValueError`), a reset (409) or an expired cursor (410) fails
+before that charge. `follow()` waits the `poll_after` the server advises
+between polls (`every=` overrides), from the first listing on.
+`MsfIntegrityError` means a downloaded file, hash, row count, cursor or
+revision envelope failed validation; do not advance the saved cursor. An epoch
+reset (409) or expired cursor (410) requires a new snapshot; a filtered resume
+whose cursor snapshot is no longer retained raises the same 410. A demo key
+gets `403` history-restricted from `bf.injuries`
+`snapshot(league=...)`, `follow(league=...)` and `freshness(league=...)`: it
+reads them only through `snapshot(league=..., at_revision=..., epoch=...)` or
+archives inside its sample month (May 2026). See [msf.md](msf.md) for revision application and the
+generated dataset pages for frozen column types.
+
+Each game and league a dataset listed by `bf.datasets()` covers is published
+from its first observation ([coverage.md](coverage.md#msf-feed-history)). A
+covered scope with nothing published yet, usually a game that has not started,
+raises `NotFoundError` whose `.type` is
+`https://api.betflux.ai/problems/not-yet-available`, from `snapshot()`,
+`freshness()`, `changes()` and `archives()`. Wait for publication; do not loop
+on it. A game that started before 2025-01-01 00:00 UTC is listed but never
+will be published. `follow()` without a cursor instead
+waits for the first publication itself — every poll interval, calling
+`on_wait(error, seconds)` before each wait — and raises any other 404.
 
 ### Types
 
@@ -105,15 +158,17 @@ Common errors subclass `BetfluxError`; catch that base class for other API failu
 |---|---|
 | `AuthError` | 401 — key missing, malformed, unrecognized |
 | `PaymentRequiredError` | 402 `subscription-required` — key valid, but account has no active subscription; response includes `upgrade_url` |
-| `ForbiddenError` | 403 — key revoked or suspended (`key-disabled`) |
-| `NotFoundError` | 404 — unknown game/dataset, or league not covered |
+| `ForbiddenError` | 403 — key revoked or suspended (`key-disabled`), or the request is outside the key's history window (`history-restricted`; a demo key on current MSF injuries) |
+| `NotFoundError` | 404 — unknown game/dataset, or league not covered; for MSF, `.type` `…/problems/not-yet-available` means nothing is published yet for that game or league |
 | `GameLiveError` | 404 `not-final` — the game is still live. A `NotFoundError` subclass; the dataset methods handle it for you |
 | `LiveCursorResetError` | 409 — the live log was rebuilt under the cursor; start over without one |
 | `LiveSegmentBehindError` | 409 on a listed segment URL — behind its listing; the dataset methods re-list for you |
 | `LiveInconsistentError` | a live step's listing and bodies kept disagreeing; nothing returned, cursor unmoved — call again |
 | `RateLimitError` | 429 — per-minute limit |
+| `QuotaExceededError` | 429 — the monthly row quota is spent; `.reset` is when it refills |
 | `NetworkError` | transport failure |
 | `APIError` | other non-2xx |
+| `MsfIntegrityError` | an MSF file, hash, row count, cursor or revision envelope failed validation; do not advance the saved cursor |
 
 Rate limits, 5xx, and transport failures retry automatically with backoff that
 honors `Retry-After` (capped). Access errors are
@@ -168,7 +223,7 @@ it to render its stderr bar. Pass `on_progress=` to `Client`.
 Download one file with the CLI, then use DuckDB locally to reuse it across queries.
 
 ```bash
-betflux get closing-lines --game NBA_GSW_MIA_20260401 --output closing.parquet
+betflux get closing-lines --game NBA_DET_ORL_20260501 --output closing.parquet
 ```
 
 ```sql

@@ -1,6 +1,6 @@
 {
   "name": "betflux",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "description": "Query BetFlux sportsbook datasets with CLI and Python workflows.",
   "author": { "name": "BetFlux", "url": "https://betflux.ai" },
   "homepage": "https://betflux.ai/docs/sdk/agents/",
