@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.4.0 — 2026-10-27
+
+- Usage is metered in distinct games per billing period, never in rows
+  (ADR-0092). `SKILL.md` gains a "Limits on this key" section right after
+  setup: the counting rules (a game counts once per period on its first read
+  of any dataset; re-reads, other datasets, listings, reference data and
+  injuries are free; recent games are free on plans with that window; at the
+  cap only a new game is refused; the trial sample is the first weekend of
+  each month; excluded features are 403 `plan-excludes`) and six habits —
+  `betflux keys check --json` first, `get … --dry-run` before a range pull,
+  first-weekend games on a trial key, prefer games already counted (`betflux
+  usage games`, `betflux games --cost`), skip live when `limits.live` is
+  false, stop on 429 `quota-exhausted`. Every number comes from `/v1/me` at
+  runtime; the skill states no allowance, price or rate.
+- The error table lists 429 `quota-exhausted` (games), 403 `plan-excludes`,
+  429 `rate-limited` and `throttled`, and `history-restricted` now means a
+  trial key asked for a game outside the first-weekend sample.
+- Row-quota wording is gone from `SKILL.md`, `references/python.md`,
+  `cli.md`, `msf.md` and `http-api.md`. The datasets table keeps rows per
+  game as download size, with the note that cost is per game, not per row.
+- `references/cli.md`: `keys check --json`, `betflux usage` and `usage games
+  [--league] [--from] [--to] [--json]`, `games --cost`, `get --dry-run`,
+  `--allow-partial` and `--quiet`, the `games:` stderr line after `get`,
+  `live-board` and `live-tail`, and the per-error messages.
+- `references/python.md`: `Client.usage()`, `preview_games()`,
+  `counted_games()`, `Dataset.preview()` and `iter(games=)`, `.cost` on
+  reads, `GameDone.counted` / `.games_remaining`, `PlanRequiredError`, and
+  `QuotaExceededError` in games.
+- `references/http-api.md` (generated): the `/v1/me` shape, `POST
+  /v1/me/games/preview`, `GET /v1/me/games`, the `x-betflux-game` and
+  `x-betflux-games-remaining` headers and the 429/403 bodies.
+- The example game is `NBA_ORL_DET_20260503` (Magic at Pistons, the Sunday of
+  May 2026's first weekend) and the workflow's range is that weekend, so a
+  trial key can run every example in the skill as written; 0.2.0's May 2026
+  examples were chosen for the sample month this rule replaces.
+- Needs betflux 0.9.0 for the usage commands and the preview.
+
 ## 0.3.0 — 2026-10-27
 
 - `game-state-timeline` is the estimated game state with confidence (dataset

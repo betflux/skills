@@ -13,9 +13,9 @@ MSF injuries · MSF serving schema `v1` · 13 snapshot columns
 | Snapshot | `GET /v1/leagues/{league}/injuries/snapshot` |
 | Changes | `GET /v1/leagues/{league}/injuries/changes?cursor=...` |
 
-This is a league-wide current injury state, not a game dataset. It mirrors MySportsFeeds' injury report, which usually changes about once a day and is not a complete injury list (see msf.md). An injury leaving the source snapshot produces a delete. Historical revisions can be subject to the account's history window. The CLI exposes `--availability` on `live-tail`; Python `follow(filters={...})` supports it too.
+This is a league-wide current injury state, not a game dataset. It mirrors MySportsFeeds' injury report, which usually changes about once a day and is not a complete injury list (see msf.md). An injury leaving the source snapshot produces a delete. The CLI exposes `--availability` on `live-tail`; Python `follow(filters={...})` supports it too.
 
-The snapshot manifest names authenticated, immutable Parquet files and includes a cursor, source observation, coverage, status and revision metadata. Download all files before applying later revisions from that cursor. Change listings are paged at complete revision boundaries; to page a finite set, send the first page's `high_water_revision` as `until_revision` on every later page. For a key whose history window ends before the newest revision (the demo key's sample month), that mark is the last revision the key may read. A `409` with problem type `stream-reset` requires a fresh snapshot; a `410` with problem type `cursor-expired` means the resume history is gone.
+The snapshot manifest names authenticated, immutable Parquet files and includes a cursor, source observation, coverage, status and revision metadata. Download all files before applying later revisions from that cursor. Change listings are paged at complete revision boundaries; to page a finite set, send the first page's `high_water_revision` as `until_revision` on every later page. A `409` with problem type `stream-reset` requires a fresh snapshot; a `410` with problem type `cursor-expired` means the resume history is gone.
 Each game and league a listed feed covers is published from its first observation; the start dates are in [coverage.md](../coverage.md#msf-feed-history). A covered scope with nothing published yet, usually a game that has not started, answers `404` with problem type `not-yet-available`: wait for publication, and do not retry the same request in a loop. `live-tail` started without a cursor waits for the first publication itself.
 Snapshot and changes responses include a `freshness` object. Its nullable fields are `newest_applied_source_updated_at`, `last_changed_at`, `latest_request_started_at`, `last_pull_success_observed_at`, `last_normalized_at`, and `health_observed_at`. Null means independent health evidence is unavailable. The revision's `source_observation` describes its pinned source; it must not be treated as the newest request or fully processed frontier. On current snapshots `published_at` is when the head adopted that data, preserved through archive/retention maintenance; historical snapshots use the manifest upload time.
 
@@ -26,7 +26,7 @@ betflux get injuries --league NFL
 betflux live-tail --dataset injuries --league NFL
 ```
 
-Filters run after download and do not reduce quota. Snapshot export supports `.parquet` and `.csv`; `live-tail` emits JSONL only. A managed `--output changes.jsonl` keeps a cursor sidecar for resume.
+Filters run after download and don't change what a game costs. A league dataset counts nothing, but needs a plan whose `limits.league_datasets` is true; every other key, a trial key included, gets 403 `plan-excludes` on each read. Manifests and listings are free. Snapshot export supports `.parquet` and `.csv`; `live-tail` emits JSONL only. A managed `--output changes.jsonl` keeps a cursor sidecar for resume.
 
 ## Snapshot columns
 

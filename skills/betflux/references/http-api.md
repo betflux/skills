@@ -35,13 +35,16 @@ For non-Python callers. Every `/v1` request needs `Authorization: Bearer bfx_liv
 | `GET` | `/v1/leagues/{league}/{dataset}/archives/{archive_id}` | Read an immutable archive baseline and complete revision metadata. |
 | `GET` | `/v1/leagues/{league}/{dataset}/archives/{archive_id}/baseline/{index}` | Download a pinned archive baseline Parquet file. |
 | `GET` | `/v1/leagues/{league}/{dataset}/archives/{archive_id}/changes/{revision}/{index}` | Download a pinned archive change Parquet file. |
-| `GET` | `/v1/me` | Inspect the calling API key. |
+| `GET` | `/v1/me` | Introspect the calling API key: tier, rate limit, and the period's games usage. |
+| `POST` | `/v1/me/games/preview` | Price a list of game ids against the period's games allowance without counting any. |
+| `GET` | `/v1/me/games` | List the games counted or exempt this period (free to read again), newest read first. |
 
 ## Payloads
 
 `GET /v1/games/{game_id}/{dataset}` returns a Parquet file
 (`application/vnd.apache.parquet`), not JSON. The server streams bytes and
-never filters rows. Range requests are supported (206).
+never filters rows. Range requests are supported (206); a partial read
+counts the game like a full one.
 
 MSF snapshot/change listings return JSON manifests; their authenticated
 `/revisions/{epoch}/{revision}/{kind}/{index}` files and archive
@@ -50,5 +53,73 @@ where MSF serving is enabled; `GET /v1/datasets` lists the MSF datasets
 available, and elsewhere they return 404.
 Other endpoints return JSON. Errors are RFC 9457 problem+json; the `type`
 and `detail` fields describe the failure. Respect `Retry-After` when provided.
+
+## Limits and usage
+
+Usage is metered in distinct games per billing period: a game counts once,
+on the first successful read of any of its datasets (final artifacts, live
+segments and the board, MSF game files), and every later read of it — other
+datasets, re-reads, Range requests, cache hits, live polls — is free.
+Listings, reference data, league datasets (`injuries`), 304s, 404s and 409s
+count nothing. The rules are the same for every key; every number below is
+the key's own and must be read from `GET /v1/me` at runtime, never assumed.
+
+**`GET /v1/me`** describes the key's whole entitlement. Free, never counts a
+game, and reachable when the allowance is spent.
+
+| Field | Meaning |
+|---|---|
+| `key_id`, `tier` | The key and its tier code |
+| `plan.label`, `plan.size` | The plan's display name and, for plans sold in sizes, which size (`size` null otherwise) |
+| `limits.rate_limit_per_minute` | The effective per-minute limit for the channel the request came in on |
+| `limits.games_per_period` | Games the plan allows per period; `null` means uncapped |
+| `limits.free_recent_game_days` | Games dated within this many days are free (`exempt`); `null` when the plan has no such window |
+| `limits.max_keys` | API keys the account may hold |
+| `limits.live`, `limits.league_datasets` | Whether live lines and league datasets are included; a read of an excluded feature is 403 `plan-excludes` |
+| `limits.sample` | `"first-weekend"` on a trial key: only games from the first Saturday of a month and the Sunday after it can be read; `null` on every other plan |
+| `usage.unit` | `"games"` |
+| `usage.period_start`, `usage.resets_at` | ISO instants (UTC): when the current period began and when the counters reset |
+| `usage.games_used`, `usage.games_allowance`, `usage.games_remaining` | The period's counters; `games_allowance` and `games_remaining` are `null` when uncapped |
+| `usage.games_exempt` | Games read free this period under the recent-game window |
+| `usage.rows_used` | Rows served this period — telemetry, never a limit |
+| `usage.counted_by_league` | Counted games per league, e.g. `{"NFL": 120, "NBA": 40}`; the ids are not listed here |
+| `upgrade_url` | Where to change plan |
+| `quota` | Legacy row block (`monthly_rows` always `null`), kept for one SDK release |
+
+**`POST /v1/me/games/preview`** with `{"game_ids": [...]}` (at most 5,000
+ids) prices a pull before it is made. It counts nothing. The response is
+`{"games": [{"game_id", "cost"}], "games_used", "games_allowance",
+"games_remaining", "fits", "over_by"}` where `cost` is `new` (would
+count), `already` (counted this period, free), `exempt` (within the
+recent-game window, free) or `invalid`; `fits` says whether every new game
+fits in `games_remaining` and `over_by` how many do not. 503 when the usage
+ledger is unreachable.
+
+**`GET /v1/me/games`** lists the games counted or exempt this period, newest
+read first, filtered by `league`, `date_from` and `date_to`, paginated with
+`limit` (default 200, at most 1,000) and `cursor` as `{data, next_cursor}`.
+Each item is `{game_id, first_read_at, first_dataset, cost}` with `cost`
+`counted` or `exempt`; both stay free to read again all period. It counts
+nothing.
+
+**Response headers on a counted read** (capped plans): `x-betflux-game:
+new | already | exempt` says what this read cost, and
+`x-betflux-games-remaining` what is left. An uncapped plan sends neither.
+
+**Refusals**, all RFC 9457 problem+json — dispatch on `type`
+(`https://api.betflux.ai/problems/<name>`), never on the title:
+
+- `429` `quota-exhausted`: the period's allowance is spent and this game
+  would be a new one. Body: `game_id`, `games_used`, `games_allowance`,
+  `reset` (date), `reset_at` (instant), `upgrade_url`, `unit`, and a
+  `Retry-After` of the seconds until the reset. Games already counted stay
+  readable; do not retry a new game before `reset_at`.
+- `429` `rate-limited`: too many requests this minute; retry after
+  `Retry-After`. `429` `throttled` is an operations stop on the key: do not
+  retry.
+- `403` `plan-excludes`: the plan does not include the feature. Body:
+  `feature`, `required_tiers`, `upgrade_url`. Never retry on this key.
+- `403` `history-restricted`: a trial key asked for a game outside the
+  first-weekend sample. Body: `upgrade_url`. Choose a sample date or a plan.
 
 Machine-readable spec: `https://api.betflux.ai/v1/openapi.json` · interactive: `https://api.betflux.ai/docs`

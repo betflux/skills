@@ -1,6 +1,6 @@
 ---
 name: betflux
-description: Discover and query BetFlux sportsbook and MSF game and injury datasets through its CLI, Python SDK, or HTTP API. Use for BetFlux data access, live game state, plays, stats, injuries, historical odds analysis, closing line value, and dataset exploration.
+description: Discover and query BetFlux sportsbook and MSF game and injury datasets through its CLI, Python SDK, or HTTP API. Use for BetFlux data access, live game state, plays, stats, injuries, historical odds analysis, closing line value, dataset exploration, and checking what a BetFlux key may read and what a pull will cost.
 ---
 
 # BetFlux
@@ -43,6 +43,57 @@ SDK read saved credentials; do not inspect keychain entries or credential files.
 For automation, have the user configure `BETFLUX_API_KEY` securely outside chat.
 Manual keys are available at <https://betflux.ai/account/api-keys>.
 
+## Limits on this key
+
+Usage is metered in **distinct games per billing period**, never in rows. The
+rules are the same for every key; the numbers belong to the key and come from
+`/v1/me` at runtime — never assume an allowance, rate or price from a plan
+name.
+
+- A game counts once per period, on its first successful read of any of its
+  datasets, a partial (Range) read included. Re-reads of a counted game, its
+  other datasets, listings, reference data and `injuries` are free.
+- Games dated within `limits.free_recent_game_days` are free (`exempt`) on
+  plans that have that window.
+- At the cap only a *new* game is refused (429 `quota-exhausted`); every game
+  already counted stays readable until `usage.resets_at`.
+- On a trial key (`limits.sample` is set) only first-weekend games can be read:
+  the first Saturday of a month and the Sunday after it. Any other date is
+  403 `history-restricted`.
+- A feature the plan excludes (live lines when `limits.live` is false, league
+  datasets when `limits.league_datasets` is false) is 403 `plan-excludes` and
+  is never worth retrying on this key. A rate-limit 429 (`rate-limited`) is
+  retried after `Retry-After`.
+
+`betflux usage`, `keys check --json`, `get --dry-run` and `--allow-partial`,
+and `games --cost` need betflux 0.9.0 or later (`betflux --version`); an older
+CLI rejects them as unknown commands or options. Upgrade it with
+`uv tool upgrade betflux` (or `pip install -U betflux`) before relying on them.
+
+Habits:
+
+1. Run `betflux keys check --json` when a task starts and before any
+   multi-game job; budget against `usage.games_remaining` (null means no cap).
+2. Run `betflux get … --dry-run` before a range pull. It prints what the pull
+   would cost (new, already counted, exempt) and whether it fits, and
+   downloads nothing. Ask the user before spending more than a quarter of what
+   is left. A pull that would not fit aborts by itself unless
+   `--allow-partial` is given.
+3. On a trial key, choose first-weekend games and tell the user the rest needs
+   a plan (`upgrade_url` in `/v1/me`).
+4. Prefer games already counted this period, since they are free: `betflux
+   usage games` lists them and `betflux games --cost` marks them
+   (`free_to_read`). One game answers many questions at no extra cost.
+5. Skip `live-board`, `live-tail` and live `sportsbook-lines` reads when
+   `limits.live` is false, and `get injuries` when `limits.league_datasets`
+   is false.
+6. Stop on 429 `quota-exhausted` instead of retrying. Keep working with the
+   games already counted, and report `resets_at` and `upgrade_url`.
+
+After `get`, `live-board` and `live-tail` the CLI prints one stderr line,
+`games: N new, M already counted · X of Y left · resets YYYY-MM-DD`
+(`--quiet` silences it). Report it when the user is budgeting.
+
 ## Query behavior
 
 The artifact endpoint streams one whole Parquet file per game; row filters
@@ -50,9 +101,10 @@ are evaluated locally after download. On range queries, team and league also
 narrow game discovery, reducing the number of files fetched.
 
 `--limit N` stops fetching once N matching rows have been yielded on a range
-query. It limits output, not the number of downloaded rows: if local filters
-match nothing, every game in the range can still be downloaded. Results may
-end mid-game or mid-date; do not treat a limited sample as a complete period.
+query. It limits output, not the number of downloaded games: if local filters
+match nothing, every game in the range can still be downloaded, and each one
+counts. Results may end mid-game or mid-date; do not treat a limited sample as
+a complete period.
 
 Start with one game or day to confirm the shape before widening the query.
 `sportsbook-lines` and `game-state-timeline` support `--game` only.
@@ -92,11 +144,12 @@ Discover games and confirm the requested dataset.
 ## Workflow
 
 ```bash
-betflux keys check                                     # validate credentials
+betflux keys check --json                              # validate credentials; plan, limits, games left
 betflux datasets                                       # what's available
-betflux games --league NBA --date-from 2026-05-01 --date-to 2026-05-07
-betflux get closing-lines --game NBA_DET_ORL_20260501  # one game first
-betflux get closing-lines --league NBA --date-from 2026-05-01 --date-to 2026-05-07
+betflux games --league NBA --date-from 2026-05-02 --date-to 2026-05-03 --cost
+betflux get closing-lines --game NBA_ORL_DET_20260503  # one game first
+betflux get closing-lines --league NBA --date-from 2026-05-02 --date-to 2026-05-03 --dry-run
+betflux get closing-lines --league NBA --date-from 2026-05-02 --date-to 2026-05-03
 betflux live-board MLB_WAS_DET_20260922                # in-progress game: current prices
 ```
 
@@ -114,8 +167,12 @@ betflux live-board MLB_WAS_DET_20260922                # in-progress game: curre
 | `team-stats` | game, team and stable stat key | varies | `--game` only |
 | `injuries` | league and player injury state | league-wide | `--league` only |
 
-Row counts are sizing estimates and vary by league, operators, and market
-coverage; local filters do not reduce the downloaded artifact's row count.
+Rows per game is download size, not cost. Cost is per game, not per row: a
+game counts once per period whichever dataset is read first, a
+`sportsbook-lines` read costs the same as a `game-state` read of the same
+game, and the other datasets of a counted game are free. Row counts are
+sizing estimates and vary by league, operators, and market coverage; local
+filters do not reduce the downloaded artifact's row count.
 
 ## Reference data
 
@@ -131,13 +188,14 @@ its odds history `sportsbook-lines`. Columns and filters are in
 An unsettled game's `sportsbook-lines` is served live: `get` assembles it,
 `betflux live-board GAME` shows what each operator is quoting now, and
 `betflux live-tail GAME` follows new lines until interrupted. Live rows are
-provisional. Live listings are free and each live row is charged once per
-account per month, however often it is read: a repeated `get` on a live game
-is charged only for rows published since, and a `live-tail` poll only for the
-rows it brings in (both still re-download bytes). Keep `--every` at 5 s or more
-(the API's cache; faster re-downloads the same bytes), and resume a tail with
-`--cursor` (printed when it stops) or start one with `--from-now` — a bare
-rerun backfills the whole history.
+provisional. Live listings are free, and a live game counts once per period
+like any other game: the first segment or board read counts it, and every
+later poll, repeated `get` or board read of it is free (bytes are still
+re-downloaded). Live lines need a plan with `limits.live`; on any other key
+they are 403 `plan-excludes`. Keep `--every` at 5 s or more (the API's cache;
+faster re-downloads the same bytes), and resume a tail with `--cursor`
+(printed when it stops) or start one with `--from-now` — a bare rerun
+backfills the whole history.
 
 `market-results` includes NCAAM and NCAAF with beta grading limits:
 box-score facts are available, but play-by-play is absent; missing facts and unsupported
@@ -153,7 +211,7 @@ suffix for the second game of a doubleheader. Case-insensitive. Use the
 game id returned by `betflux games`.
 
 ```
-NBA_DET_ORL_20260501
+NBA_ORL_DET_20260503
 MLB_BOS_NYY_20260715_2
 ```
 
@@ -199,8 +257,11 @@ yourself; it keeps the transcript small. Timestamps render as ISO 8601.
 | 401 | key missing, malformed, or unrecognized | check for an explicit credential override; have the user sign in with `betflux login` if no valid saved login exists |
 | 402 `subscription-required` | key valid, but account has no active subscription | report the response details and `upgrade_url`; retry only after account access is restored |
 | 403 `key-disabled` | key revoked or suspended | user must resolve account access and replace the revoked key; do not retry |
-| 403 `history-restricted` | the request is outside the key's history window; a demo key gets it for any game outside its sample month (May 2026) and for current MSF injuries (`get injuries`, `live-tail --dataset injuries`) | do not retry; stay inside the window (historical injury snapshots and archives in the sample month, see `references/msf.md`) or use a paid key |
-| 429 | request rejected by a service limit | respect `Retry-After`; if the client surfaces an error, report it rather than looping |
+| 403 `history-restricted` | a trial key asked for a game outside its sample: only games from the first weekend of a month (the first Saturday and the Sunday after it) can be read | do not retry; choose first-weekend games (`betflux games` lists dates) and tell the user other dates need a plan (`upgrade_url`) |
+| 403 `plan-excludes` | the plan does not include this feature: live lines (`limits.live`) or a league dataset such as `injuries` (`limits.league_datasets`); the body names `feature` and `required_tiers` | never retry on this key; skip the feature and tell the user which plans include it (`upgrade_url`) |
+| 429 `quota-exhausted` | the period's games allowance is spent and this game would be a new one; the body carries `games_used`, `games_allowance`, `reset_at` and `upgrade_url` | do not retry; keep working with the games already counted (`betflux usage games`), report when it resets and where to upgrade |
+| 429 `rate-limited` | too many requests this minute | respect `Retry-After` (the CLI and SDK retry it for you); if the client surfaces an error, report it rather than looping |
+| 429 `throttled` | an operations stop on this key | do not retry; report it |
 | 404 `not-yet-available` | MSF only: nothing has been published yet for that game or league, though `betflux datasets` lists its league | not a bad request and not a reason to loop: wait for publication (a game that started before 2025-01-01 00:00 UTC never will be) |
 | 404 | unknown game, dataset, or league not covered; `No route matches` on an MSF command means MSF serving is not enabled there | verify with `betflux games` / `betflux datasets` |
 
@@ -213,12 +274,15 @@ Do not retry access errors without resolving their cause.
 from betflux import Client
 
 with Client() as bf:
-    games = bf.games(league="NBA", date_from="2026-05-01", date_to="2026-05-07")
+    games = bf.games(league="NBA", date_from="2026-05-02", date_to="2026-05-03")
     rows = bf.closing_lines.game(games[0]["id"], operator="FANDUEL")
-    df = bf.closing_lines.df(league="NBA", date_from="2026-05-01", date_to="2026-05-07")
+    df = bf.closing_lines.df(league="NBA", date_from="2026-05-02", date_to="2026-05-03")
 ```
 
-`df()` over a wide range downloads the selected games before returning. Details in `references/python.md`.
+`df()` over a wide range downloads the selected games before returning, and
+each counts; `bf.closing_lines.preview(league=..., date_from=..., date_to=...)`
+says what it would cost first and `bf.usage()` is `/v1/me` typed. Details in
+`references/python.md`.
 
 ## Reference index
 
@@ -236,9 +300,9 @@ Read these only when the task needs them.
 - **[references/datasets/team-stats.md](references/datasets/team-stats.md)** — team stat keys, values and metric filtering
 - **[references/datasets/injuries.md](references/datasets/injuries.md)** — league injury state and availability
 - **[references/reference-data.md](references/reference-data.md)** — leagues, teams, players, games: columns, filters, and the current-state rule
-- **[references/cli.md](references/cli.md)** — every command and flag
-- **[references/python.md](references/python.md)** — `Client`, dataset handles, typed errors, DuckDB
-- **[references/http-api.md](references/http-api.md)** — raw endpoints, for non-Python callers
+- **[references/cli.md](references/cli.md)** — every command and flag, including `keys check --json`, `--dry-run`, `--allow-partial` and `usage games`
+- **[references/python.md](references/python.md)** — `Client`, dataset handles, `usage()` / `preview()` / `counted_games()`, typed errors, DuckDB
+- **[references/http-api.md](references/http-api.md)** — raw endpoints, the `/v1/me` shape, the preview endpoint, the cost headers and the 429/403 bodies, for non-Python callers
 - **[references/recipes.md](references/recipes.md)** — worked examples: CLV, line movement, backtest frames
 
 Docs: <https://betflux.ai/docs>

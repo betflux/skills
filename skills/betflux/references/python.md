@@ -32,9 +32,12 @@ bf.leagues()
 bf.teams(league="NBA")
 bf.players(league="NBA", team_id=...)
 bf.games(league="NBA", date_from="2026-05-01", date_to="2026-05-07")
-bf.game("NBA_DET_ORL_20260501")
+bf.game("NBA_ORL_DET_20260503")
 bf.datasets()
 bf.check_key()
+bf.usage()                                   # the key's plan, limits and the period's games
+bf.preview_games(["NBA_ORL_DET_20260503"])   # what reading these would cost
+bf.counted_games(league="NBA")               # games already counted: free to read again
 ```
 
 Rows are plain dicts. A game carries its id, schedule (`start_time`, `status`,
@@ -58,10 +61,12 @@ the settled-artifact methods in this table.
 | Method | Returns |
 |---|---|
 | `.game(game_id, **filters)` | list of row dicts for one game |
-| `.query_game(game_id, **filters)` | `(rows, hint)` — hint explains a zero-row result; also `.provisional` |
-| `.iter(**kwargs)` | streaming iterator over a range |
+| `.query_game(game_id, **filters)` | `(rows, hint)` — hint explains a zero-row result; also `.provisional` and `.cost` |
+| `.preview(league=, date_from=, date_to=, team=)` or `.preview(games=[...])` | `GamesPreview`: what the pull would cost, nothing downloaded or counted |
+| `.iter(**kwargs)` | streaming iterator over a range, or over explicit ids with `games=[...]`; its `.games()` is a per-game cost tally afterwards |
 | `.rows(**kwargs)` | list over a range |
 | `.df(**kwargs)` | pandas DataFrame (needs the `pandas` extra) |
+| `.validate_filters(**filters)` | raises `ValueError` for a filter the dataset lacks, without fetching |
 | `.raw(game_id)` | the Parquet bytes — verbatim for a settled game; a live game's are its segments stitched and re-encoded by the SDK |
 | `.is_live(game_id)` | `sportsbook_lines` only: is the game being served live (any 404 reads as no) |
 | `.live_segments(game_id, cursor)` | `sportsbook_lines` only: one poll step |
@@ -80,17 +85,83 @@ for row in bf.closing_lines.iter(
 
 `df()` over a range downloads the selected games before returning a DataFrame.
 `max_rows` is the Python equivalent of `--limit`: it caps matching output rows,
-not downloaded rows. Local filters may match no rows in a file. Team and league
+not downloaded games. Local filters may match no rows in a file. Team and league
 filters also narrow game discovery on range queries.
+
+### Limits and cost
+
+Usage is metered in distinct games per billing period: a game counts once, on
+its first successful read of any of its datasets, and every later read of it
+is free. The rules are in `SKILL.md`; the numbers are the key's and come from
+`/v1/me` at runtime, so never assume them.
+
+```python
+with Client() as bf:
+    usage = bf.usage()                      # typed /v1/me; free, never counts a game
+    usage.plan.label, usage.limits.games_per_period, usage.limits.live
+    usage.games_used, usage.games_remaining, usage.resets_at, usage.upgrade_url
+
+    preview = bf.closing_lines.preview(league="NBA", date_from="2026-05-01", date_to="2026-05-07")
+    preview.new, preview.already, preview.exempt, preview.fits, preview.over_by
+    if preview.fits:
+        rows = bf.closing_lines.rows(games=list(preview.games))   # exactly what was previewed
+    else:
+        rows = bf.closing_lines.rows(games=preview.fitting())      # the part the allowance covers
+
+    for game in bf.counted_games(league="NBA"):                     # free to read again
+        game.game_id, game.first_read_at, game.first_dataset, game.cost   # "counted" | "exempt"
+```
+
+- `Usage` (`bf.usage()`): `tier`, `plan` (`label`, `size`), `limits`
+  (`rate_limit_per_minute`, `games_per_period` — `None` when uncapped —
+  `free_recent_game_days`, `max_keys`, `live`, `league_datasets`, `sample`),
+  `period_start`, `resets_at`, `games_used`, `games_allowance`,
+  `games_remaining`, `games_exempt`, `rows_used`, `counted_by_league`,
+  `upgrade_url`, and `raw` (the body as served). `metered` is `False` on a
+  gateway from before games metering, and then every games field is `None`.
+  `check_key()` returns the same facts as a plain dict beside its legacy keys.
+- `GamesPreview` (`bf.preview_games(ids)`, `Dataset.preview(...)`): `games`
+  maps each id to `new` (would count), `already` (counted this period, free),
+  `exempt` (within the plan's recent-game window, free), `restricted` (outside
+  the free sample, refused) or `invalid`; `new`/`already`/`exempt`/
+  `restricted`/`invalid` are the counts; `fits` and `over_by`
+  compare the new games with `games_remaining`; `fitting()` is the ids the
+  allowance covers, in order. Ids are posted to `/v1/me/games/preview` in
+  chunks of at most 5,000 and nothing is counted by asking.
+- `CountedGame` (`bf.counted_games(league=, date_from=, date_to=)`): pages
+  through `GET /v1/me/games`, newest read first; `cost` is `counted` or
+  `exempt`.
+- What a read cost, from the `x-betflux-game` and `x-betflux-games-remaining`
+  response headers: `GameCost` (`outcome` is `new`, `already` or `exempt`,
+  `counted` is the boolean form, `games_remaining`) as `.cost` on `GameRows`
+  (`query_game`), `GameTable`, `LiveSegments`, `LiveBoard`, `MsfSnapshot` and
+  `MsfRevision`; on progress events `GameDone.counted` (`True` for `new`,
+  `False` for `already` or `exempt`, `None` when the gateway sent no header —
+  an uncapped plan or an older gateway) and `GameDone.games_remaining`. After
+  a range pull, `iter(...).games()` tallies `new`, `already`, `exempt` and
+  `unknown` per distinct game.
+- `Dataset.iter(games=[...])` pulls explicit ids instead of discovering a
+  range; `_iter_rows` is the only multi-game loop, so `rows()` and `df()`
+  take `games=` too. A live game whose segments the plan excludes (403
+  `plan-excludes`) is skipped by `iter` like a game without data
+  (`GameSkipped(reason="plan-excludes")`, counted in `.games().plan_excluded`)
+  rather than aborting the range; a single-game read raises
+  `PlanRequiredError`.
+
+On a gateway without the preview or counted-games endpoints `preview_games`
+and `counted_games` raise `NotFoundError`; `usage()` raises it on a gateway
+without `/v1/me`, where `check_key()` still answers from a `/v1/leagues` probe.
 
 ### MSF snapshots and changes
 
 The four game handles take a public game ID; `bf.injuries` takes `league=`.
 `snapshot()` returns rows, metadata, a cursor and the downloaded Arrow schema.
 `changes(cursor, ...)` yields a finite sequence of complete revisions through
-the first listing's high-water mark; for a key whose history window ends (the
-demo key's sample month) that mark is its last readable revision.
-`follow()` polls continuously, and waits at that edge. Each
+the first listing's high-water mark. `follow()` polls continuously, and waits
+at that edge. A game's snapshot and revision files count the game once per
+period like any other read of it (free once it is counted, and `MsfSnapshot`
+/ `MsfRevision` carry `.cost`); `injuries` counts nothing but needs a plan
+with `limits.league_datasets`. Each
 revision has `metadata`, `rows` and `.cursor`, even when `rows` is empty.
 
 ```python
@@ -105,20 +176,22 @@ with Client() as bf:
 Use `follow(..., from_now=True)` to skip baseline output. With filters, the SDK
 still loads the baseline so rows leaving a filter can produce deletes; resuming
 a filtered `follow(cursor=...)` downloads the whole snapshot at the cursor's
-revision and is charged its full row count. It first checks the cursor against
-the dataset and scope and makes one free changes listing, so a cursor for
-another stream (`ValueError`), a reset (409) or an expired cursor (410) fails
-before that charge. `follow()` waits the `poll_after` the server advises
-between polls (`every=` overrides), from the first listing on.
-`MsfIntegrityError` means a downloaded file, hash, row count, cursor or
-revision envelope failed validation; do not advance the saved cursor. An epoch
-reset (409) or expired cursor (410) requires a new snapshot; a filtered resume
-whose cursor snapshot is no longer retained raises the same 410. A demo key
-gets `403` history-restricted from `bf.injuries`
-`snapshot(league=...)`, `follow(league=...)` and `freshness(league=...)`: it
-reads them only through `snapshot(league=..., at_revision=..., epoch=...)` or
-archives inside its sample month (May 2026). See [msf.md](msf.md) for revision application and the
-generated dataset pages for frozen column types.
+revision (a full re-download; the game is counted already, so it costs no
+game). It first checks the cursor against the dataset and scope and makes one
+free changes listing, so a cursor for another stream (`ValueError`), a reset
+(409) or an expired cursor (410) fails before any download. `follow()` waits
+the `poll_after` the server advises between polls (`every=` overrides), from
+the first listing on. `MsfIntegrityError` means a downloaded file, hash, row
+count, cursor or revision envelope failed validation; do not advance the saved
+cursor. An epoch reset (409) or expired cursor (410) requires a new snapshot;
+a filtered resume whose cursor snapshot is no longer retained raises the same
+410. On a plan without `limits.league_datasets` (a trial key) every
+`bf.injuries` read — `snapshot(league=...)`, `follow(league=...)`,
+`freshness(league=...)` and the archives — raises `PlanRequiredError` (403
+`plan-excludes`); a trial key reads game datasets only for first-weekend games
+and gets `ForbiddenError` `history-restricted` for any other date. See
+[msf.md](msf.md) for revision application and the generated dataset pages for
+frozen column types.
 
 Each game and league a dataset listed by `bf.datasets()` covers is published
 from its first observation ([coverage.md](coverage.md#msf-feed-history)). A
@@ -155,14 +228,15 @@ Common errors subclass `BetfluxError`; catch that base class for other API failu
 |---|---|
 | `AuthError` | 401 — key missing, malformed, unrecognized |
 | `PaymentRequiredError` | 402 `subscription-required` — key valid, but account has no active subscription; response includes `upgrade_url` |
-| `ForbiddenError` | 403 — key revoked or suspended (`key-disabled`), or the request is outside the key's history window (`history-restricted`; a demo key on current MSF injuries) |
+| `ForbiddenError` | 403 — key revoked or suspended (`key-disabled`), or a game the plan may not read (`history-restricted`: a trial key asked for a game outside its first-weekend sample; `.extra["upgrade_url"]`) |
+| `PlanRequiredError` | 403 `plan-excludes` — a `ForbiddenError` subclass: the plan does not include `.feature` (live lines, league datasets); `.required_tiers` names the plans that do and `.upgrade_url` where to change plan. Never worth retrying on this key |
 | `NotFoundError` | 404 — unknown game/dataset, or league not covered; for MSF, `.type` `…/problems/not-yet-available` means nothing is published yet for that game or league |
 | `GameLiveError` | 404 `not-final` — the game is still live. A `NotFoundError` subclass; the dataset methods handle it for you |
 | `LiveCursorResetError` | 409 — the live log was rebuilt under the cursor; start over without one |
 | `LiveSegmentBehindError` | 409 on a listed segment URL — behind its listing; the dataset methods re-list for you |
 | `LiveInconsistentError` | a live step's listing and bodies kept disagreeing; nothing returned, cursor unmoved — call again |
-| `RateLimitError` | 429 — per-minute limit |
-| `QuotaExceededError` | 429 — the monthly row quota is spent; `.reset` is when it refills |
+| `RateLimitError` | 429 `rate-limited` — per-minute limit; retried for you after `Retry-After` |
+| `QuotaExceededError` | 429 `quota-exhausted` — the period's games allowance is spent and `.game_id` would be a new game; games already counted stay readable. `.games_used`, `.games_allowance`, `.reset` (`YYYY-MM-DD`), `.reset_at` (instant) and `.upgrade_url`. Not retried |
 | `NetworkError` | transport failure |
 | `APIError` | other non-2xx |
 | `MsfIntegrityError` | an MSF file, hash, row count, cursor or revision envelope failed validation; do not advance the saved cursor |
@@ -178,8 +252,8 @@ handles that without being asked: the client follows the API's live pointer,
 downloads the Parquet segments and concatenates them into the same columns the
 final file would have. The only difference is that the rows are **provisional**
 — `query_game()` reports it as `.provisional`. Every such call downloads every
-segment again (listings are free, and each live row is charged once per account
-per month, so a repeat is charged only for rows published since), so rather than
+segment again (listings are free, and the game counts once per period on its
+first read, so a repeat costs no game but all of the bytes), so rather than
 looping `game()` on a live game, poll:
 
 ```python
@@ -192,10 +266,12 @@ while True:
 ```
 
 The listing is free and incremental; the segments it names are downloaded
-whole — the open tail on every poll in which it grew — but each row is charged
-once per account per month, so a poll costs only the rows it brings in. Polling
-faster than the ~5 s cache re-downloads the same bytes. A first poll without a
-cursor backfills the whole history.
+whole — the open tail on every poll in which it grew — and the game counts
+once, on the first segment read, so later polls cost no game (`step.cost`
+reports `already`). Polling faster than the ~5 s cache re-downloads the same
+bytes. A first poll without a cursor backfills the whole history. Live lines
+need a plan with `limits.live`: on any other key the segment listing raises
+`PlanRequiredError`.
 
 The cursor is an opaque position, not a timestamp: a slower operator's file can
 land after a faster one's later-stamped rows, so a timestamp would drop them.
@@ -220,7 +296,7 @@ it to render its stderr bar. Pass `on_progress=` to `Client`.
 Download one file with the CLI, then use DuckDB locally to reuse it across queries.
 
 ```bash
-betflux get closing-lines --game NBA_DET_ORL_20260501 --output closing.parquet
+betflux get closing-lines --game NBA_ORL_DET_20260503 --output closing.parquet
 ```
 
 ```sql

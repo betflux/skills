@@ -16,7 +16,7 @@ Both are null when either end is missing.
 
 ```bash
 betflux get closing-lines \
-  --league NBA --date-from 2026-05-01 --date-to 2026-05-07 \
+  --league NBA --date-from 2026-05-02 --date-to 2026-05-03 \
   --team "Detroit Pistons" \
   --columns game_date,operator,market_key,side,opening_odds,closing_odds,clv_odds \
   --format csv > det-clv.csv
@@ -28,7 +28,7 @@ betflux get closing-lines \
 It is `--game`-only. Save the Parquet rather than rendering it:
 
 ```bash
-betflux get sportsbook-lines --game NBA_DET_ORL_20260501 --output movement.parquet
+betflux get sportsbook-lines --game NBA_ORL_DET_20260503 --output movement.parquet
 ```
 
 Then query locally:
@@ -74,7 +74,7 @@ from betflux import Client
 
 with Client() as bf:
     rows = bf.market_results.rows(
-        league="NBA", date_from="2026-05-01", date_to="2026-05-01",
+        league="NBA", date_from="2026-05-03", date_to="2026-05-03",
     )
 
 # Require a real pre-game close. The timestamp check also protects reads of
@@ -104,7 +104,7 @@ season across all leagues is a large download.
 ## Scoreboard state over time
 
 ```bash
-betflux get game-state-timeline --game NBA_DET_ORL_20260501 --format jsonl
+betflux get game-state-timeline --game NBA_ORL_DET_20260503 --format jsonl
 ```
 
 Beta, and every value is an estimate: say so, with the field's confidence,

@@ -66,9 +66,37 @@ Prints the guide bundled with the installed SDK to stdout, without network
 access or installation. This snapshot may differ from an independently
 released plugin.
 
-### `betflux keys check`
+### `betflux keys check [--json]`
 
-Validates the key and reports the API's account metadata.
+Validates the key and reports its plan, the period's games and the plan's
+limits, every number from `GET /v1/me`. Free: it never counts a game and
+works at the allowance.
+
+```
+key valid (https://api.betflux.ai)
+plan: <label> (<TIER>) — <n> requests/min
+games: <used> of <allowance> used this period (<pct>%) · <left> left · <exempt> recent (free) · resets YYYY-MM-DD
+limits: games from the last <d> days are free · live: yes|no · league datasets: yes|no
+```
+
+An uncapped plan prints `games: <used> used this period · no cap`; a trial key
+adds `sample: first-weekend games only`. `--json` prints the raw `/v1/me`
+body (`tier`, `plan`, `limits`, `usage`, `upgrade_url`) for agents to parse;
+see [http-api.md](http-api.md#limits-and-usage) for the fields. On a gateway
+from before games metering the games lines are absent.
+
+### `betflux usage` / `betflux usage games`
+
+`betflux usage` prints the same plan and games lines as `keys check`.
+`betflux usage games` lists the games counted or exempt this period, newest
+read first — every one is free to read again, in any dataset, until the
+period resets. Listing them counts nothing.
+
+| Option | Notes |
+|---|---|
+| `--league` | e.g. `NFL` |
+| `--from`, `--to` | Inclusive game date, `YYYY-MM-DD` |
+| `--json` | A JSON array of `{game_id, first_read_at, first_dataset, cost}` (`cost` is `counted` or `exempt`) |
 
 ### `betflux datasets [--format]`
 
@@ -94,9 +122,10 @@ Every field beyond the teams and schedule is nullable.
 | `--team` | Canonical team name; matches home or away |
 | `--status` | `SCHEDULED`, `STARTED`, `COMPLETED` |
 | `--id` | Fetch one game by id instead of listing |
+| `--cost` | Adds a `free_to_read` column: `true` when the game is already counted or exempt this period, so reading it costs nothing; `false` when it would count as a new game. One preview call (`POST /v1/me/games/preview`) over the listed ids; opt-in because it is one more request |
 | `--format`, `--columns`, `--wide` | Output control; the default table is a curated subset, `--wide` shows every column |
 
-`--id` is exclusive: pairing it with any filter is an error. For one game's
+Listing games is free and counts nothing. `--id` is exclusive: pairing it with any filter is an error. For one game's
 whole record use `--id <id> --format record`. The record is current state
 (latest score, status, roster), not history — see
 [reference-data.md](reference-data.md).
@@ -108,7 +137,35 @@ Reference data. `teams` takes `--league`; `players` takes `--league` and/or
 
 ### `betflux get <dataset>`
 
-Downloads dataset files and returns matching rows.
+Downloads dataset files and returns matching rows. Each game read counts
+once against the period's games allowance on its first read of any dataset;
+re-reads and the other datasets of a counted game are free.
+
+**Cost first.** A date-range pull previews its cost before downloading
+anything (one free `POST /v1/me/games/preview` over the games in the range):
+
+- `--dry-run` prints the preview and exits 0 without downloading or counting
+  anything: how many games are new (would count), already counted (free) and
+  recent (free), and whether the pull fits in what is left. With `--format
+  json` the preview is JSON (`games` per id, `new`, `already`, `exempt`,
+  `invalid`, `games_used`, `games_allowance`, `games_remaining`, `fits`,
+  `over_by`). With `--game` it previews that one game; on an MSF league
+  snapshot it is refused, since league snapshots never count a game.
+- A pull that would exceed the allowance aborts before downloading (exit 1,
+  `this pull would exceed your games allowance: …`). `--allow-partial` pulls
+  what fits instead — every already-counted or exempt game plus the first new
+  ones that fit, in listing order — and prints a `note:` naming how many were
+  skipped.
+- On a gateway without the preview endpoint a plain pull proceeds without the
+  check (the API's own admission still refuses a game past the allowance) and
+  `--dry-run` fails, since it has nothing to report.
+
+After the read, one stderr line reports what it cost and what is left:
+`games: N new, M already counted · X of Y left · resets YYYY-MM-DD`, with
+`, K recent (free)` appended when the plan's recent-game window applied. An
+uncapped plan reads `games: N read · U used this period · no cap`. `--quiet`
+silences it (and the `note:` lines). A single-game `get` on a plan that sends
+no cost headers prints no line rather than spending an extra request.
 
 **Addressing** — exactly one of:
 
@@ -147,49 +204,64 @@ A filter naming a column the dataset lacks is rejected before any download.
 | `--wide` | Table only: every column instead of the curated subset |
 | `--format` | `table` (default), `record`, `json`, `jsonl`, `csv` |
 | `--no-progress` | Also `BETFLUX_NO_PROGRESS=1`; auto-disabled when stderr is not a terminal |
+| `--dry-run` | Preview the cost and stop; nothing is downloaded or counted (see **Cost first**) |
+| `--allow-partial` | Date ranges only: when the pull would exceed the allowance, download the games that fit instead of aborting |
+| `--quiet` | Silence the `games:` usage line and the cost notes on stderr |
 
 `jsonl` and `csv` stream rows as each game's file arrives. `record` prints
 vertical `key: value` blocks — the readable choice for a single wide row.
 
 MSF `get` reads the current snapshot; its files carry the frozen public schema.
 `game-state`, `plays`, `player-stats`, `team-stats` and `injuries`
-have separate columns and revision feeds. See [msf.md](msf.md) and the five
-generated dataset pages.
+have separate columns and revision feeds. A game snapshot counts the game once
+per period like any other read of it; an `injuries` snapshot counts nothing,
+but needs a plan with `limits.league_datasets` (403 `plan-excludes`
+otherwise). See [msf.md](msf.md) and the five generated dataset pages.
 
 **Live games.** A `sportsbook-lines` game that has not settled has no final
 file; `get` assembles its rows from the live feed and prints
 `provisional: <game> is live; …` on stderr. stdout is unchanged, so pipes are
 unaffected. Report the provisional status when you pass such rows on. Each run
-downloads every live segment again, but each live row is charged once per
-account per month, so a rerun is charged only for rows published since; still,
-use `live-tail` rather than looping `get`. `--output` on a live game saves the
-segments re-encoded by the SDK, not a server file.
+downloads every live segment again; the game counts once per period on its
+first read, so a rerun is free, but it is still a full re-download — use
+`live-tail` rather than looping `get`. Live lines need a plan with
+`limits.live`: on any other key a live game's segments answer 403
+`plan-excludes`, and `get --game` stops with `your plan does not include live
+lines` (exit 1). `--output` on a live game saves the segments re-encoded by
+the SDK, not a server file.
 
 ### `betflux live-board <game>`
 
 The current board for a live game: one row per selection each operator is
 believed to be quoting, with `quote_state` (`live` / `stale_suspect`),
 `last_changed_at` and `operator_observed_through` on top of the
-`sportsbook-lines` columns. A snapshot, not history. Board reads are metered
-at a weight the API sets (free during Beta). Once the game has settled it
-exits 0 and points at `betflux get sportsbook-lines --game <game>`.
+`sportsbook-lines` columns. A snapshot, not history. A board read counts the
+game once per period like any other read of it, so the board of a game
+already counted is free; it needs a plan with `limits.live` (403
+`plan-excludes` otherwise). Once the game has settled it exits 0 and points
+at `betflux get sportsbook-lines --game <game>`. It ends with the same
+`games:` stderr line as `get`.
 
 | Option | Notes |
 |---|---|
 | `--operator` | One operator's board file instead of every operator's |
 | `--output PATH` | Save as Parquet instead of rendering rows |
 | `--columns`, `--wide`, `--format` | As `get` |
+| `--quiet` | Silence the `games:` usage line |
 
 ### `betflux live-tail <game>`
 
 Follows a live game's new lines until Ctrl-C. Each poll lists what is new
 since the cursor (a position, not a timestamp; the listing is free) and
 downloads the segments it names — the open tail on every poll in which it
-grew. Each live row is charged once per account per month, so a poll costs only
-the rows it brings in. A first poll with neither `--cursor` nor `--from-now`
+grew. The game counts once per period, on the first segment read; every later
+poll is free. A first poll with neither `--cursor` nor `--from-now`
 backfills the whole history published so far. Stops by itself once the game
 settles, pointing at
-`betflux get sportsbook-lines --game <game>` for the settled history.
+`betflux get sportsbook-lines --game <game>` for the settled history, and
+prints the `games:` stderr line when it ends. Live lines need a plan with
+`limits.live`; otherwise the tail stops at once with the `plan-excludes`
+message and exit 1.
 
 | Option | Notes |
 |---|---|
@@ -198,6 +270,7 @@ settles, pointing at
 | `--from-now` | Take the current position from one free listing and follow only rows published after it |
 | `--output PATH` | Append new rows to a file instead of printing them; resume with `--cursor` so the file holds the history once |
 | `--columns`, `--format` | As `get`, except `--format` defaults to `jsonl` — rows arrive per poll — and `json` is refused (an array per poll is not one document) |
+| `--quiet` | Silence the `games:` usage line |
 
 Ctrl-C is the normal way to end it and exits 0, not 130; the line it prints
 carries the cursor reached. A live log rebuilt under the cursor (409
@@ -251,4 +324,11 @@ ends it with exit 1.
 
 Failures print `Error: …` to stderr and exit 1. `BETFLUX_DEBUG=1` adds a
 traceback. Ctrl-C exits 130, except in `live-tail`, where it is the normal way
-to stop and exits 0.
+to stop and exits 0. `get --dry-run` exits 0 after printing the preview; a
+range pull the allowance cannot cover exits 1 before any download unless
+`--allow-partial` is given. The access errors each have their own message:
+429 `quota-exhausted` (`this game would be a new one … Games already read
+this period stay free … Resets … Upgrade: …`), 403 `plan-excludes` (`your
+plan does not include <feature>. Plans that include it: … Upgrade: …`) and
+403 `history-restricted` (the trial sample rule and the upgrade link). None of
+them is worth retrying on the same key.

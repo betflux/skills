@@ -34,7 +34,9 @@ betflux live-tail --dataset injuries --league NFL --from-now --output injuries.j
 `get` downloads a current snapshot. The snapshot manifest identifies a frozen
 schema version, source observation, stream epoch and revision, coverage, status,
 the Parquet files with hashes/counts, and a cursor. Snapshot exports support
-Parquet and CSV. Filters run locally after download and do not reduce quota.
+Parquet and CSV. Filters run locally after download and don't change what a
+game costs: a game counts once per period, on its first read of any dataset,
+and a league snapshot (`injuries`) counts nothing.
 In the stat datasets, `stat_key` is stable but opaque for most stats (`msf:`
 plus an encoded source name); `source_stat_category` and `source_stat_name`
 name the stat. `metric` is set only on stats mapped to a canonical name, about
@@ -120,37 +122,41 @@ The SDK also has `bf.game_state`, `bf.player_stats`, and `bf.team_stats`.
 `snapshot().df()` returns a pandas DataFrame, including columns for an empty
 snapshot. `follow()` polls continuously; `changes(cursor)` returns the finite
 set published through a fixed high-water revision (over HTTP, the first
-page's `high_water_revision`, sent as `until_revision` on later pages). For a
-key whose history window ends before the newest revision (the demo key's sample
-month), the high-water mark is the last revision that key may read, so the
-listing still ends and `follow()` then waits there. Read and verify all files
-for a revision before saving its cursor. A `409` with problem type
-`…/problems/stream-reset` requires a new snapshot and state replacement. A
-`410` with problem type `…/problems/cursor-expired` means the prior resume
-history is unavailable. A filtered resume, `follow(cursor=..., filters=...)`
-or a filtered `live-tail` resuming from `--cursor` or its output checkpoint,
-downloads the whole historical snapshot at the cursor's revision, charged at
-its full row count, to rebuild which rows pass the filter. Before that download
-it checks that the cursor names the requested dataset and scope and makes one
-free changes listing from it, so a cursor for another stream (`ValueError`), a
-stream reset (`409`) or an expired cursor (`410`) fails without a charge. Once
-the cursor's snapshot is outside retained history it fails with the same `410`
-cursor-expired error, one revision before an unfiltered resume would. For raw
-HTTP paths and file authentication, see [http-api.md](http-api.md).
+page's `high_water_revision`, sent as `until_revision` on later pages). Read
+and verify all files for a revision before saving its cursor. A `409` with
+problem type `…/problems/stream-reset` requires a new snapshot and state
+replacement. A `410` with problem type `…/problems/cursor-expired` means the
+prior resume history is unavailable. A filtered resume,
+`follow(cursor=..., filters=...)` or a filtered `live-tail` resuming from
+`--cursor` or its output checkpoint, downloads the whole historical snapshot
+at the cursor's revision to rebuild which rows pass the filter — a full
+re-download, though the game is counted already so it costs no game. Before
+that download it checks that the cursor names the requested dataset and scope
+and makes one free changes listing from it, so a cursor for another stream
+(`ValueError`), a stream reset (`409`) or an expired cursor (`410`) fails
+before any download. Once the cursor's snapshot is outside retained history
+it fails with the same `410` cursor-expired error, one revision before an
+unfiltered resume would. For raw HTTP paths and file authentication, see
+[http-api.md](http-api.md).
 
-A demo key cannot read the current injuries head. Its history window is the
-demo sample month, May 2026, and every current read of a league dataset is
-checked against it: `betflux get injuries`, `betflux live-tail --dataset
-injuries` (with or without `--from-now`), and `bf.injuries`
-`.snapshot(league=...)`, `.follow(league=...)` and `.freshness(league=...)`
-answer `403` with problem type `…/problems/history-restricted`. A demo key
-reads injuries only through a historical snapshot,
-`bf.injuries.snapshot(league=..., at_revision=..., epoch=...)`, whose source
-date falls in that month, or through the archives `.archives(league=...)` lists
-for it. Do not retry the `403`; use those reads, or a paid key for current
-injuries. Game
-datasets follow the usual rule: a demo key reads games dated in its sample
-month.
+What a game read costs: the first snapshot or revision file read of a game
+counts it once for the period (reported in the `x-betflux-game` header and as
+`.cost` on `MsfSnapshot` and `MsfRevision`); every later read of that game —
+other datasets, `follow()` polls, `live-tail`, archives — is free. Manifests,
+listings and `freshness()` are always free.
+
+League datasets (`injuries`) count nothing, but need a plan whose
+`limits.league_datasets` is true. On any other key — a trial key included —
+every league read answers `403` with problem type `…/problems/plan-excludes`:
+`betflux get injuries`, `betflux live-tail --dataset injuries` (with or
+without `--from-now`), and `bf.injuries` `.snapshot(league=...)`,
+`.follow(league=...)`, `.freshness(league=...)` and `.archives(league=...)`
+(`PlanRequiredError` in Python). Do not retry it; tell the user which plans
+include league datasets (`required_tiers`, `upgrade_url`). Game datasets
+follow the sample rule: a trial key reads games from the first weekend of a
+month (the first Saturday and the Sunday after it) and gets `403`
+`history-restricted` for any other date. Check `betflux keys check --json`
+(`limits`) before planning either.
 
 The generated dataset pages list each frozen snapshot column and change
 envelope: [game-state](datasets/game-state.md), [plays](datasets/plays.md),
@@ -173,13 +179,13 @@ with Client() as bf:
 ```
 
 The SDK verifies every reconstructed state digest and original row provenance.
-Metadata remains free; baseline and change downloads charge downloaded rows.
-Archive access uses the same historical entitlement as other historical reads.
-A league change listing serves the revisions inside the key's history window
-and reports the last of them as `high_water_revision` on every page, so paging
-to that mark finishes; a listing from a cursor at the edge is an empty `200`.
-Only a cursor the key could never read is refused with a `history-restricted`
-problem.
+Metadata remains free; a game archive's baseline and change downloads count
+the game once per period like any other read of it, and a league archive's
+count nothing. Archive access follows the same plan rules as other reads: the
+sample rule for a trial key's game archives, `limits.league_datasets` for
+league archives. A league change listing reports the last readable revision
+as `high_water_revision` on every page, so paging to that mark finishes; a
+listing from a cursor at the edge is an empty `200`.
 A deliberately retired direct snapshot returns `404 revision_not_retained`
 with archive discovery; an expired cursor returns `410` with a fresh snapshot
 and archive link. Missing files still promised by a retained manifest are errors.

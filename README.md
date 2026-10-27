@@ -5,7 +5,9 @@ normalized US sportsbook odds (NFL, NBA, MLB, NHL, NCAAM) served as per-game
 Parquet files.
 
 The skill teaches an agent how to discover games, choose datasets, apply
-filters, and work with Parquet files through the CLI, Python SDK, or HTTP API.
+filters, and work with Parquet files through the CLI, Python SDK, or HTTP API,
+and how to read the key's own limits and what a pull will cost before spending
+any of its games allowance.
 
 ## Installing
 
