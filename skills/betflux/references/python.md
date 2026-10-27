@@ -136,9 +136,6 @@ waits for the first publication itself — every poll interval, calling
 Timestamp and date columns come back as Python `datetime` / `date` objects —
 pyarrow decodes the Parquet types — **not** ISO strings. Compare these values using their native Python types.
 
-One exception: `game-state-timeline`'s `ts` is a plain **int64 of epoch
-milliseconds (UTC)**, not a native timestamp. Convert it yourself.
-
 ## Filters
 
 Passed as keyword arguments; evaluated locally after download. A filter naming

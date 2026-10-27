@@ -132,8 +132,6 @@ narrow game discovery on range queries, reducing downloads):
 | `--side` | the three lines datasets, e.g. `HOME`, `OVER` |
 | `--player-id` | Original line/result datasets, MSF player stats and injuries |
 | `--outcome` | `market-results` only: `WON`, `LOST`, `PUSH`, `INDETERMINATE` |
-| `--field` | `game-state-timeline` only, e.g. `home_score` |
-| `--source` | `game-state-timeline` only, e.g. `draftkings` |
 | `--metric` | MSF player/team stats; applies the reviewed restatement policy |
 | `--team-id` | MSF player/team stats and injuries |
 

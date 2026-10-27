@@ -47,7 +47,7 @@ The closing lines dataset · 44 columns · ~12,000 rows per game
 | `live_records` | `integer` | yes | Change-only records observed at or after game_start. |
 | `first_seen_at` | `string` | yes | Timestamp this side was first observed, ISO-8601 UTC. |
 | `last_seen_at` | `string` | yes | Timestamp this side was last observed (including live), ISO-8601 UTC. |
-| `clv_odds` | `integer` | yes | closing_odds - opening_odds in American odds; null when either is missing or the opening and closing market meanings are incompatible. |
+| `clv_odds` | `integer` | yes | closing_odds - opening_odds in American odds cents, counting -100 and +100 as the same price (-102 to +100 is 2); null when either is missing or the opening and closing market meanings are incompatible. |
 | `clv_implied` | `number` | yes | opening_implied - closing_implied; null when either is missing or the opening and closing market meanings are incompatible. |
 | `market_player_ids` | `string[]` | yes | Player UUIDs referenced by the market, as of the closing record. |
 | `selection_player_ids` | `string[]` | yes | Player UUIDs referenced by the selection, as of the closing record. |

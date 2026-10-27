@@ -107,7 +107,7 @@ betflux live-board MLB_WAS_DET_20260922                # in-progress game: curre
 | `closing-lines` | one row per (operator, market, selection, side) | ≈ 12,000 | range **or** `--game` |
 | `market-results` | closing lines + graded outcome | ≈ 12,000 | range **or** `--game` |
 | `sportsbook-lines` | every change-only line observation | **~190k** | `--game` only |
-| `game-state-timeline` | flat `ts` / `field` / `value` / `source` observations | varies | `--game` only |
+| `game-state-timeline` (beta) | our estimate of the score, period, clock and situation, one row per change, with confidence | ≈ 200–1,500 | `--game` only |
 | `game-state` | latest MSF score, status, clock and period state | one | `--game` only |
 | `plays` | latest complete MSF play set | varies | `--game` only |
 | `player-stats` | game, player and stable stat key | varies | `--game` only |
@@ -171,7 +171,6 @@ front, before any download.
 | `--side` | the three lines datasets |
 | `--player-id` | `closing-lines`, `market-results`, `sportsbook-lines`, MSF `player-stats` and `injuries` |
 | `--outcome` (`WON`, `LOST`, `PUSH`, `INDETERMINATE`) | `market-results` |
-| `--field`, `--source` | `game-state-timeline` |
 | `--metric` | `player-stats`, `team-stats`; applies reviewed restatement policy |
 | `--team-id` | MSF `player-stats`, `team-stats` and `injuries` |
 | `--availability` | MSF injuries in `live-tail` |
@@ -191,8 +190,7 @@ are wide.
 - `--output PATH` — save a final odds artifact with `--game`, or an MSF snapshot as `.parquet`/`.csv` with its game or league scope
 
 Prefer `--columns` plus `--format jsonl` when you intend to process rows
-yourself; it keeps the transcript small. Timestamps generally render as ISO 8601;
-`game-state-timeline.ts` is epoch milliseconds and needs explicit conversion.
+yourself; it keeps the transcript small. Timestamps render as ISO 8601.
 
 ## Errors
 
@@ -230,7 +228,7 @@ Read these only when the task needs them.
 - **[references/datasets/closing-lines.md](references/datasets/closing-lines.md)** — columns, filters, coverage
 - **[references/datasets/market-results.md](references/datasets/market-results.md)** — graded outcomes and settlement columns
 - **[references/datasets/sportsbook-lines.md](references/datasets/sportsbook-lines.md)** — full line history
-- **[references/datasets/game-state-timeline.md](references/datasets/game-state-timeline.md)** — observation rows, field/source values
+- **[references/datasets/game-state-timeline.md](references/datasets/game-state-timeline.md)** — beta: estimated state rows, confidence columns, as-of joins
 - **[references/msf.md](references/msf.md)** — snapshot and revision protocol, CLI and SDK examples
 - **[references/datasets/game-state.md](references/datasets/game-state.md)** — MSF game status and score columns
 - **[references/datasets/plays.md](references/datasets/plays.md)** — complete play snapshots and append/replace revisions

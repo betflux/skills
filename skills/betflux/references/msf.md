@@ -5,7 +5,8 @@
 when serving is enabled for the API environment. The CLI commands need betflux
 0.7.0 or later; an older CLI rejects these dataset names locally even when the
 listing shows them. The source is MySportsFeeds;
-`game-state-timeline` is a separate multi-source observation dataset.
+`game-state-timeline` is a separate beta dataset: our estimate of the state
+from every source we hold, with confidence.
 
 `betflux datasets` (`GET /v1/datasets`) lists every league a feed covers, and
 each covered game and league is published from its first observation; the

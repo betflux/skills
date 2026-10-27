@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 — 2026-10-27
+
+- `game-state-timeline` is the estimated game state with confidence (dataset
+  v3, beta): say that every value is an estimate, and document its columns,
+  the as-of join to line moves, and that a row is a best estimate built from
+  later reports, including the full play-by-play. Drop the `--field` /
+  `--source` filters. Older betflux versions still read it but show every
+  column; 0.8.0 shows the score, period, clock and situation.
+
 ## 0.2.0 — 2026-10-16
 
 - Add the MSF datasets — game state, plays, player stats, team stats and

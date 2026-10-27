@@ -2,25 +2,46 @@
 
 # game-state-timeline
 
-The state timeline dataset · 8 columns · a variable number of rows per game
+The state timeline dataset · 23 columns · ~200–1,500 rows per game
 
 | | |
 |---|---|
 | Leagues | MLB, NBA, NHL, NFL |
 | Addressing | `--game` only |
-| Filters | `league`, `field`, `source` |
+| Filters | `league` |
 
 > Addressed one game at a time.
+
+> **Beta: every value is an estimate.** Each row is our estimate of the game
+> state from late, sometimes conflicting sportsbook and stats-feed reports,
+> not an official record. Use the `*_confidence` columns (and
+> `clock_seconds_remaining_p90_error`) when you report a value, and say it
+> is an estimate. Rows and estimates may change between versions.
 
 ## Columns
 
 | Column | Type | Nullable | Description |
 |---|---|---|---|
 | `game_id` | `string` | no | Game id: LEAGUE_AWAY_HOME_YYYYMMDD (ET date; `_2` suffix for the second game of a doubleheader). |
-| `league` | `string` | no | League code, e.g. NBA, NFL, MLB, NHL. |
-| `game_date` | `string` | no | Calendar date of the scheduled start in US Eastern time (Parquet date, YYYY-MM-DD). |
-| `ts` | `integer` | no | Observation timestamp, epoch milliseconds UTC (int64; renamed from the gold column ts_ms). |
-| `field` | `string` | no | Stable snake_case state field, e.g. home_score, period, clock. |
-| `value` | `string` | yes | Observed value, stringified; null when the field was cleared. |
-| `source` | `string` | no | Observation source: a stats-feed or sportsbook operator code. |
+| `league` | `string` | no | League code: MLB, NBA, NHL or NFL. |
+| `game_date` | `string` | no | Calendar date of the scheduled start in US Eastern time. |
+| `ts` | `string` | no | When this state began. It holds until the next row's ts, so as-of join on it (DuckDB `ASOF JOIN ... ON l.timestamp >= s.ts`). It is the best estimate of when the state was true, built with reports that arrived later (including the game's full play-by-play), so it is not what was knowable at that moment. |
+| `home_score` | `integer` | yes |  |
+| `home_score_confidence` | `number` | yes | Calibrated probability that the value is exactly right, measured against independent play-by-play; null when the value is null. |
+| `away_score` | `integer` | yes |  |
+| `away_score_confidence` | `number` | yes | Calibrated probability that the value is exactly right, measured against independent play-by-play; null when the value is null. |
+| `period_number` | `integer` | yes | Quarter (NBA, NFL), period (NHL) or inning (MLB); null between games and once no source has reported it for 30 minutes, as after the final. |
+| `period_number_confidence` | `number` | yes | Calibrated probability that the value is exactly right, measured against independent play-by-play; null when the value is null. |
+| `clock_seconds_remaining` | `integer` | yes | Seconds left on the game clock in the period (NBA, NHL, NFL); null for MLB. From about 30 seconds after each report we run the clock on, so it can step back up by up to about 30 seconds when a report shows the clock had stopped. |
+| `clock_seconds_remaining_p90_error` | `number` | yes | The clock is within this many seconds of the true clock 90% of the time. |
+| `mlb_inning_half` | `string` | yes | TOP or BOTTOM. |
+| `mlb_inning_half_confidence` | `number` | yes | Calibrated probability that the value is exactly right, measured against independent play-by-play; null when the value is null. |
+| `mlb_outs` | `integer` | yes | Outs in the half-inning. No source reports outs promptly, so expect a low confidence. |
+| `mlb_outs_confidence` | `number` | yes | Calibrated probability that the value is exactly right, measured against independent play-by-play; null when the value is null. |
+| `nfl_down` | `integer` | yes | Down, 1–4; null at kickoffs and tries. |
+| `nfl_down_confidence` | `number` | yes | Calibrated probability that the value is exactly right, measured against independent play-by-play; null when the value is null. |
+| `nfl_yards_remaining` | `integer` | yes | Yards to go for a first down. |
+| `nfl_yards_remaining_confidence` | `number` | yes | Calibrated probability that the value is exactly right, measured against independent play-by-play; null when the value is null. |
+| `nfl_possessing_team_side` | `string` | yes | HOME or AWAY: the team with the ball. |
+| `nfl_possessing_team_side_confidence` | `number` | yes | Calibrated probability that the value is exactly right, measured against independent play-by-play; null when the value is null. |
 | `dataset_version` | `string` | yes | Version of the dataset this game's file was built at, e.g. `v5`. Games in one pull can differ: versions of a compatibility line only add columns or carry documented changes (see `versions` on /v1/datasets). Columns added after a game's version read null for it. Files built before this column existed lack it entirely (null when read with DuckDB `union_by_name = true`); the `X-Betflux-Dataset-Version` response header still names their version. |

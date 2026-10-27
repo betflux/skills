@@ -7,7 +7,8 @@ Worked examples. See `SKILL.md` for query behavior and supported datasets.
 CLV is **precomputed**. Do not derive it from `opening_odds` / `closing_odds`
 yourself:
 
-- `clv_odds` = `closing_odds − opening_odds` (American odds points)
+- `clv_odds` = `closing_odds − opening_odds` in American odds cents, counting
+  −100 and +100 as one price (−102 → +100 is 2; before v9 it read 202)
 - `clv_implied` = `opening_implied − closing_implied` (implied probability,
   vig included)
 
@@ -103,9 +104,22 @@ season across all leagues is a large download.
 ## Scoreboard state over time
 
 ```bash
-betflux get game-state-timeline --game NBA_DET_ORL_20260501 --field home_score
+betflux get game-state-timeline --game NBA_DET_ORL_20260501 --format jsonl
 ```
 
-Flat observation rows: `ts` / `field` / `value` / `source`. `ts` is an **int64
-of epoch milliseconds (UTC)** — the one timestamp column that is not a native
-Parquet timestamp. Multiple sources report the same field; `--source` picks one.
+Beta, and every value is an estimate: say so, with the field's confidence,
+when you report one. One row each time the estimated state changes; a row
+holds until the next row's `ts`. Each field has a calibrated confidence beside it (the clock has a
+p90 error in seconds). To get the state behind each line move, as-of join on
+`ts`:
+
+```sql
+SELECT l.timestamp, l.odds, s.home_score, s.away_score, s.period_number, s.clock_seconds_remaining
+FROM read_parquet('lines.parquet') l
+ASOF JOIN read_parquet('state.parquet') s ON l.game_id = s.game_id AND l.timestamp >= s.ts
+```
+
+A row is the best estimate of the state true at `ts`, built with reports that
+arrived later (including the game's full play-by-play), so it is not what was
+knowable at that moment.
+Allow for that before backtesting a strategy that reacts to the game state.
