@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 — 2026-10-28
+
+- The MSF datasets are now called sports data, so the skill no longer ties
+  them to one provider. `references/msf.md` is now
+  `references/sports-data.md` (and the coverage section is now
+  `#sports-data-feed-history`), and the Python examples use betflux
+  0.10.0's names: `bf.sports_dataset()`, `SportsDataSnapshot`,
+  `SportsDataRevision` and `SportsDataIntegrityError`. The old `Msf*` names
+  still work in the SDK but warn. Needs betflux 0.10.0.
+
 ## 0.4.0 — 2026-10-27
 
 - Usage is metered in distinct games per billing period, never in rows

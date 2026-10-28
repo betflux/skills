@@ -1,6 +1,6 @@
 ---
 name: betflux
-description: Discover and query BetFlux sportsbook and MSF game and injury datasets through its CLI, Python SDK, or HTTP API. Use for BetFlux data access, live game state, plays, stats, injuries, historical odds analysis, closing line value, dataset exploration, and checking what a BetFlux key may read and what a pull will cost.
+description: Discover and query BetFlux sportsbook datasets and sports data (game state, plays, stats, injuries) through its CLI, Python SDK, or HTTP API. Use for BetFlux data access, live game state, plays, stats, injuries, historical odds analysis, closing line value, dataset exploration, and checking what a BetFlux key may read and what a pull will cost.
 ---
 
 # BetFlux
@@ -108,17 +108,17 @@ a complete period.
 
 Start with one game or day to confirm the shape before widening the query.
 `sportsbook-lines` and `game-state-timeline` support `--game` only.
-MSF `game-state`, `plays`, `player-stats`, and `team-stats` use one `--game`;
+The sports datasets `game-state`, `plays`, `player-stats`, and `team-stats` use one `--game`;
 `injuries` uses one `--league`. They serve current snapshots and complete
-revision feeds, with local filters. They exist only where MSF serving is
+revision feeds, with local filters. They exist only where sports data is
 enabled: if `betflux datasets` does not list one, its commands fail with a
 plain 404 (`No route matches …`), exactly as a path that does not exist. They need betflux 0.7.0 or later (`betflux --version`); an
 older CLI rejects them locally even when `betflux datasets` lists them. See
-[references/msf.md](references/msf.md).
+[references/sports-data.md](references/sports-data.md).
 
-MSF data is published game by game (league by league for injuries), each
+Sports data is published game by game (league by league for injuries), each
 from its first observation; the start dates are in
-[references/coverage.md](references/coverage.md#msf-feed-history). A covered
+[references/coverage.md](references/coverage.md#sports-data-feed-history). A covered
 game or league with nothing published yet, usually a game that has not
 started, answers `404` with problem type `not-yet-available` ("No validated …
 snapshot has been published for this scope"). The request is valid; that scope
@@ -161,8 +161,8 @@ betflux live-board MLB_WAS_DET_20260922                # in-progress game: curre
 | `market-results` | closing lines + graded outcome | ≈ 12,000 | range **or** `--game` |
 | `sportsbook-lines` | every change-only line observation | **~190k** | `--game` only |
 | `game-state-timeline` (beta) | our estimate of the score, period, clock and situation, one row per change, with confidence | ≈ 200–1,500 | `--game` only |
-| `game-state` | latest MSF score, status, clock and period state | one | `--game` only |
-| `plays` | latest complete MSF play set | varies | `--game` only |
+| `game-state` | latest source score, status, clock and period state | one | `--game` only |
+| `plays` | latest complete play set | varies | `--game` only |
 | `player-stats` | game, player and stable stat key | varies | `--game` only |
 | `team-stats` | game, team and stable stat key | varies | `--game` only |
 | `injuries` | league and player injury state | league-wide | `--league` only |
@@ -227,11 +227,11 @@ front, before any download.
 |---|---|
 | `--league`, `--operator`, `--market-type`, `--team` | the three lines datasets |
 | `--side` | the three lines datasets |
-| `--player-id` | `closing-lines`, `market-results`, `sportsbook-lines`, MSF `player-stats` and `injuries` |
+| `--player-id` | `closing-lines`, `market-results`, `sportsbook-lines`, `player-stats` and `injuries` |
 | `--outcome` (`WON`, `LOST`, `PUSH`, `INDETERMINATE`) | `market-results` |
 | `--metric` | `player-stats`, `team-stats`; applies reviewed restatement policy |
-| `--team-id` | MSF `player-stats`, `team-stats` and `injuries` |
-| `--availability` | MSF injuries in `live-tail` |
+| `--team-id` | `player-stats`, `team-stats` and `injuries` |
+| `--availability` | `injuries` in `live-tail` |
 
 `--team` matches home **or** away.
 
@@ -245,7 +245,7 @@ are wide.
 - `--format record` — vertical `key: value`, good for one wide row
 - `--format json | jsonl | csv` — machine formats, full fidelity; `jsonl` and
   `csv` stream as each game's file arrives
-- `--output PATH` — save a final odds artifact with `--game`, or an MSF snapshot as `.parquet`/`.csv` with its game or league scope
+- `--output PATH` — save a final odds artifact with `--game`, or a sports data snapshot as `.parquet`/`.csv` with its game or league scope
 
 Prefer `--columns` plus `--format jsonl` when you intend to process rows
 yourself; it keeps the transcript small. Timestamps render as ISO 8601.
@@ -262,8 +262,8 @@ yourself; it keeps the transcript small. Timestamps render as ISO 8601.
 | 429 `quota-exhausted` | the period's games allowance is spent and this game would be a new one; the body carries `games_used`, `games_allowance`, `reset_at` and `upgrade_url` | do not retry; keep working with the games already counted (`betflux usage games`), report when it resets and where to upgrade |
 | 429 `rate-limited` | too many requests this minute | respect `Retry-After` (the CLI and SDK retry it for you); if the client surfaces an error, report it rather than looping |
 | 429 `throttled` | an operations stop on this key | do not retry; report it |
-| 404 `not-yet-available` | MSF only: nothing has been published yet for that game or league, though `betflux datasets` lists its league | not a bad request and not a reason to loop: wait for publication (a game that started before 2025-01-01 00:00 UTC never will be) |
-| 404 | unknown game, dataset, or league not covered; `No route matches` on an MSF command means MSF serving is not enabled there | verify with `betflux games` / `betflux datasets` |
+| 404 `not-yet-available` | Sports data only: nothing has been published yet for that game or league, though `betflux datasets` lists its league | not a bad request and not a reason to loop: wait for publication (a game that started before 2025-01-01 00:00 UTC never will be) |
+| 404 | unknown game, dataset, or league not covered; `No route matches` on a sports data command means sports data is not enabled there | verify with `betflux games` / `betflux datasets` |
 
 Errors are RFC 9457 problem+json; inspect the `type` and `detail` fields.
 Do not retry access errors without resolving their cause.
@@ -293,8 +293,8 @@ Read these only when the task needs them.
 - **[references/datasets/market-results.md](references/datasets/market-results.md)** — graded outcomes and settlement columns
 - **[references/datasets/sportsbook-lines.md](references/datasets/sportsbook-lines.md)** — full line history
 - **[references/datasets/game-state-timeline.md](references/datasets/game-state-timeline.md)** — beta: estimated state rows, confidence columns, as-of joins
-- **[references/msf.md](references/msf.md)** — snapshot and revision protocol, CLI and SDK examples
-- **[references/datasets/game-state.md](references/datasets/game-state.md)** — MSF game status and score columns
+- **[references/sports-data.md](references/sports-data.md)** — snapshot and revision protocol, CLI and SDK examples
+- **[references/datasets/game-state.md](references/datasets/game-state.md)** — source game status and score columns
 - **[references/datasets/plays.md](references/datasets/plays.md)** — complete play snapshots and append/replace revisions
 - **[references/datasets/player-stats.md](references/datasets/player-stats.md)** — player stat keys, values and metric filtering
 - **[references/datasets/team-stats.md](references/datasets/team-stats.md)** — team stat keys, values and metric filtering

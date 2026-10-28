@@ -21,17 +21,17 @@ For non-Python callers. Every `/v1` request needs `Authorization: Bearer bfx_liv
 | `GET` | `/v1/games/{game_id}/sportsbook-lines/segments/{seq}` | Download one live segment's Parquet. |
 | `GET` | `/v1/games/{game_id}/sportsbook-lines/board` | List a live game's current board files. |
 | `GET` | `/v1/games/{game_id}/sportsbook-lines/board/{operator}` | Download one operator's live board Parquet. |
-| `GET` | `/v1/games/{game_id}/{dataset}/snapshot` | Current or historical complete MSF snapshot manifest. |
-| `GET` | `/v1/games/{game_id}/{dataset}/changes` | List complete MSF revisions after a scope-bound cursor. |
+| `GET` | `/v1/games/{game_id}/{dataset}/snapshot` | Current or historical complete sports data snapshot manifest. |
+| `GET` | `/v1/games/{game_id}/{dataset}/changes` | List complete sports data revisions after a scope-bound cursor. |
 | `GET` | `/v1/games/{game_id}/{dataset}/revisions/{epoch}/{revision}/{kind}/{index}` | Download one immutable Parquet file from a revision manifest. |
-| `GET` | `/v1/games/{game_id}/{dataset}/archives` | List a bounded page of immutable MSF archives. |
+| `GET` | `/v1/games/{game_id}/{dataset}/archives` | List a bounded page of immutable sports data archives. |
 | `GET` | `/v1/games/{game_id}/{dataset}/archives/{archive_id}` | Read an immutable archive baseline and complete revision metadata. |
 | `GET` | `/v1/games/{game_id}/{dataset}/archives/{archive_id}/baseline/{index}` | Download a pinned archive baseline Parquet file. |
 | `GET` | `/v1/games/{game_id}/{dataset}/archives/{archive_id}/changes/{revision}/{index}` | Download a pinned archive change Parquet file. |
-| `GET` | `/v1/leagues/{league}/{dataset}/snapshot` | Current or historical complete MSF snapshot manifest. |
-| `GET` | `/v1/leagues/{league}/{dataset}/changes` | List complete MSF revisions after a scope-bound cursor. |
+| `GET` | `/v1/leagues/{league}/{dataset}/snapshot` | Current or historical complete sports data snapshot manifest. |
+| `GET` | `/v1/leagues/{league}/{dataset}/changes` | List complete sports data revisions after a scope-bound cursor. |
 | `GET` | `/v1/leagues/{league}/{dataset}/revisions/{epoch}/{revision}/{kind}/{index}` | Download one immutable Parquet file from a revision manifest. |
-| `GET` | `/v1/leagues/{league}/{dataset}/archives` | List a bounded page of immutable MSF archives. |
+| `GET` | `/v1/leagues/{league}/{dataset}/archives` | List a bounded page of immutable sports data archives. |
 | `GET` | `/v1/leagues/{league}/{dataset}/archives/{archive_id}` | Read an immutable archive baseline and complete revision metadata. |
 | `GET` | `/v1/leagues/{league}/{dataset}/archives/{archive_id}/baseline/{index}` | Download a pinned archive baseline Parquet file. |
 | `GET` | `/v1/leagues/{league}/{dataset}/archives/{archive_id}/changes/{revision}/{index}` | Download a pinned archive change Parquet file. |
@@ -46,10 +46,10 @@ For non-Python callers. Every `/v1` request needs `Authorization: Bearer bfx_liv
 never filters rows. Range requests are supported (206); a partial read
 counts the game like a full one.
 
-MSF snapshot/change listings return JSON manifests; their authenticated
+Sports data snapshot/change listings return JSON manifests; their authenticated
 `/revisions/{epoch}/{revision}/{kind}/{index}` files and archive
-`baseline`/`changes` files return immutable Parquet. MSF routes answer only
-where MSF serving is enabled; `GET /v1/datasets` lists the MSF datasets
+`baseline`/`changes` files return immutable Parquet. Sports data routes answer
+only where sports data is enabled; `GET /v1/datasets` lists the sports datasets
 available, and elsewhere they return 404.
 Other endpoints return JSON. Errors are RFC 9457 problem+json; the `type`
 and `detail` fields describe the failure. Respect `Retry-After` when provided.
@@ -58,7 +58,7 @@ and `detail` fields describe the failure. Respect `Retry-After` when provided.
 
 Usage is metered in distinct games per billing period: a game counts once,
 on the first successful read of any of its datasets (final artifacts, live
-segments and the board, MSF game files), and every later read of it — other
+segments and the board, sports data game files), and every later read of it — other
 datasets, re-reads, Range requests, cache hits, live polls — is free.
 Listings, reference data, league datasets (`injuries`), 304s, 404s and 409s
 count nothing. The rules are the same for every key; every number below is

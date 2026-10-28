@@ -149,7 +149,7 @@ anything (one free `POST /v1/me/games/preview` over the games in the range):
   recent (free), and whether the pull fits in what is left. With `--format
   json` the preview is JSON (`games` per id, `new`, `already`, `exempt`,
   `invalid`, `games_used`, `games_allowance`, `games_remaining`, `fits`,
-  `over_by`). With `--game` it previews that one game; on an MSF league
+  `over_by`). With `--game` it previews that one game; on a league
   snapshot it is refused, since league snapshots never count a game.
 - A pull that would exceed the allowance aborts before downloading (exit 1,
   `this pull would exceed your games allowance: …`). `--allow-partial` pulls
@@ -172,11 +172,11 @@ no cost headers prints no line rather than spending an extra request.
 | Form | Datasets |
 |---|---|
 | `--date-from` + `--date-to` (+ optional `--league`) | `closing-lines`, `market-results` |
-| `--game <id>` | the four original datasets plus MSF `game-state`, `plays`, `player-stats`, `team-stats` |
-| `--league <code>` without `--game` | MSF `injuries` |
+| `--game <id>` | the four original datasets plus the sports datasets `game-state`, `plays`, `player-stats`, `team-stats` |
+| `--league <code>` without `--game` | `injuries` |
 
-`sportsbook-lines`, `game-state-timeline`, and the four MSF game datasets are
-`--game`-only. MSF `injuries` is `--league`-only.
+`sportsbook-lines`, `game-state-timeline`, and the four sports data game datasets are
+`--game`-only. `injuries` is `--league`-only.
 
 **Filters** (rows are filtered locally after download; team and league also
 narrow game discovery on range queries, reducing downloads):
@@ -187,10 +187,10 @@ narrow game discovery on range queries, reducing downloads):
 | `--market-type` | the three lines datasets |
 | `--team` | the three lines datasets; matches home or away |
 | `--side` | the three lines datasets, e.g. `HOME`, `OVER` |
-| `--player-id` | Original line/result datasets, MSF player stats and injuries |
+| `--player-id` | Original line/result datasets, player stats and injuries |
 | `--outcome` | `market-results` only: `WON`, `LOST`, `PUSH`, `INDETERMINATE` |
-| `--metric` | MSF player/team stats; applies the reviewed restatement policy |
-| `--team-id` | MSF player/team stats and injuries |
+| `--metric` | Player/team stats; applies the reviewed restatement policy |
+| `--team-id` | Player/team stats and injuries |
 
 A filter naming a column the dataset lacks is rejected before any download.
 
@@ -199,7 +199,7 @@ A filter naming a column the dataset lacks is rejected before any download.
 | Option | Notes |
 |---|---|
 | `--limit N` | Range queries only: stop after N matching rows. Does not cap downloaded rows; sparse filters can download the entire range |
-| `--output PATH` | Original datasets: with `--game`, save raw Parquet. MSF snapshots: save `.parquet` or `.csv` for the dataset's game or league scope |
+| `--output PATH` | Original datasets: with `--game`, save raw Parquet. Sports data snapshots: save `.parquet` or `.csv` for the dataset's game or league scope |
 | `--columns a,b,c` | Override the default projection |
 | `--wide` | Table only: every column instead of the curated subset |
 | `--format` | `table` (default), `record`, `json`, `jsonl`, `csv` |
@@ -211,12 +211,12 @@ A filter naming a column the dataset lacks is rejected before any download.
 `jsonl` and `csv` stream rows as each game's file arrives. `record` prints
 vertical `key: value` blocks — the readable choice for a single wide row.
 
-MSF `get` reads the current snapshot; its files carry the frozen public schema.
+For a sports dataset, `get` reads the current snapshot; its files carry the frozen public schema.
 `game-state`, `plays`, `player-stats`, `team-stats` and `injuries`
 have separate columns and revision feeds. A game snapshot counts the game once
 per period like any other read of it; an `injuries` snapshot counts nothing,
 but needs a plan with `limits.league_datasets` (403 `plan-excludes`
-otherwise). See [msf.md](msf.md) and the five generated dataset pages.
+otherwise). See [sports-data.md](sports-data.md) and the five generated dataset pages.
 
 **Live games.** A `sportsbook-lines` game that has not settled has no final
 file; `get` assembles its rows from the live feed and prints
@@ -281,14 +281,14 @@ a cursor from the old version ends the tail the same way. A poll whose
 listing and segment bodies keep disagreeing prints a `note:` and polls again
 with the cursor unchanged.
 
-### MSF revision tail
+### Sports data revision tail
 
 Use `betflux live-tail GAME --dataset game-state|plays|player-stats|team-stats`,
 or `betflux live-tail --dataset injuries --league NFL` without `GAME`. The
-default dataset remains `sportsbook-lines` for compatibility. MSF output is
+default dataset remains `sportsbook-lines` for compatibility. Sports data output is
 JSONL only: one complete object per revision, including zero-row revisions.
 
-| Option | MSF behavior |
+| Option | Sports data behavior |
 |---|---|
 | `--cursor CURSOR` | Resume after a snapshot or prior revision cursor |
 | `--from-now` | Read the current snapshot cursor and emit later revisions only |
@@ -307,7 +307,7 @@ An incomplete trailing line is discarded on managed resume. A `409`
 snapshot; do not append another epoch to the old file.
 
 Started without `--cursor` on a game or league with nothing published yet
-(`404` `not-yet-available`; see [msf.md](msf.md)), the tail prints
+(`404` `not-yet-available`; see [sports-data.md](sports-data.md)), the tail prints
 `waiting: nothing published yet for <scope> <dataset> (…); checking again in
 30s, Ctrl-C to stop` on stderr and retries every poll interval (30 s, 300 s for
 injuries, or `--every`). Any other 404 — an unknown game, an uncovered league —

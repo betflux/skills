@@ -1,4 +1,4 @@
-# MSF snapshots and revision feeds
+# Sports data snapshots and revision feeds
 
 `game-state`, `plays`, `player-stats`, and `team-stats` take one public game ID.
 `injuries` takes one league. Check `betflux datasets` first: these feeds appear
@@ -10,7 +10,7 @@ from every source we hold, with confidence.
 
 `betflux datasets` (`GET /v1/datasets`) lists every league a feed covers, and
 each covered game and league is published from its first observation; the
-dates are in [coverage.md](coverage.md#msf-feed-history). A covered scope with
+dates are in [coverage.md](coverage.md#sports-data-feed-history). A covered scope with
 nothing published yet, usually a game that has not started, answers `404` with
 problem type `…/problems/not-yet-available` and the detail "No validated
 `<dataset>` snapshot has been published for this scope" — on `get`,
@@ -93,7 +93,7 @@ Revision kinds have distinct state transitions:
 
 The feed's `status` is `verified` once MySportsFeeds reports the game
 `COMPLETED` and, for plays and stats, that dataset's snapshot is complete;
-until then, and while MSF holds a final under review, it is `provisional`.
+until then, and while the source holds a final under review, it is `provisional`.
 A league has no completed state, so `injuries` is always `provisional`.
 Separate datasets do not form an atomic game bundle. Carried rows keep their
 original row-level source provenance.
@@ -141,7 +141,7 @@ unfiltered resume would. For raw HTTP paths and file authentication, see
 
 What a game read costs: the first snapshot or revision file read of a game
 counts it once for the period (reported in the `x-betflux-game` header and as
-`.cost` on `MsfSnapshot` and `MsfRevision`); every later read of that game —
+`.cost` on `SportsDataSnapshot` and `SportsDataRevision`); every later read of that game —
 other datasets, `follow()` polls, `live-tail`, archives — is free. Manifests,
 listings and `freshness()` are always free.
 

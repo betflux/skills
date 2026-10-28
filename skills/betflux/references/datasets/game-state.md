@@ -2,7 +2,7 @@
 
 # game-state
 
-MSF game state · MSF serving schema `v1` · 46 snapshot columns
+Game state · sports data schema `v1` · 46 snapshot columns
 
 | | |
 |---|---|
@@ -13,10 +13,10 @@ MSF game state · MSF serving schema `v1` · 46 snapshot columns
 | Snapshot | `GET /v1/games/{game_id}/game-state/snapshot` |
 | Changes | `GET /v1/games/{game_id}/game-state/changes?cursor=...` |
 
-One MSF game-state row records the latest source score, clock, period and sport-specific fields. Source game status, dataset coverage and serving verification are separate.
+One game-state row records the latest source score, clock, period and sport-specific fields. Source game status, dataset coverage and serving verification are separate.
 
 The snapshot manifest names authenticated, immutable Parquet files and includes a cursor, source observation, coverage, status and revision metadata. Download all files before applying later revisions from that cursor. Change listings are paged at complete revision boundaries; to page a finite set, send the first page's `high_water_revision` as `until_revision` on every later page. A `409` with problem type `stream-reset` requires a fresh snapshot; a `410` with problem type `cursor-expired` means the resume history is gone.
-Each game and league a listed feed covers is published from its first observation; the start dates are in [coverage.md](../coverage.md#msf-feed-history). A covered scope with nothing published yet, usually a game that has not started, answers `404` with problem type `not-yet-available`: wait for publication, and do not retry the same request in a loop. `live-tail` started without a cursor waits for the first publication itself.
+Each game and league a listed feed covers is published from its first observation; the start dates are in [coverage.md](../coverage.md#sports-data-feed-history). A covered scope with nothing published yet, usually a game that has not started, answers `404` with problem type `not-yet-available`: wait for publication, and do not retry the same request in a loop. `live-tail` started without a cursor waits for the first publication itself.
 Snapshot and changes responses include a `freshness` object. Its nullable fields are `newest_applied_source_updated_at`, `last_changed_at`, `latest_request_started_at`, `last_pull_success_observed_at`, `last_normalized_at`, and `health_observed_at`. Null means independent health evidence is unavailable. The revision's `source_observation` describes its pinned source; it must not be treated as the newest request or fully processed frontier. On current snapshots `published_at` is when the head adopted that data, preserved through archive/retention maintenance; historical snapshots use the manifest upload time.
 
 Each `live-tail` JSONL line is one complete revision object with `rows` and `emitted_row_count`, even when the row list is empty. `patch` upserts or deletes named keys; `append` adds plays; `replace` clears the prior play set before applying its rows. Apply only newline-terminated objects and checkpoint their cursor after durable output.

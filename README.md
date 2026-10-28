@@ -87,7 +87,7 @@ Copy `skills/betflux/` into your agent's skill directory:
 
 | Skill | Useful for |
 |---|---|
-| `betflux` | Querying closing lines, graded market results, full line history and game state timelines, plus MSF game state, plays, player and team stats, and injuries where MSF serving is enabled (CLI 0.7.0+) |
+| `betflux` | Querying closing lines, graded market results, full line history and game state timelines, plus sports data (game state, plays, player and team stats, and injuries) where it is enabled (CLI 0.7.0+) |
 
 ## Authentication
 

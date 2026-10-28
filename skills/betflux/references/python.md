@@ -51,12 +51,14 @@ columns and the rule are in [reference-data.md](reference-data.md).
 
 Handles hang off the client — `bf.closing_lines`, `bf.market_results`,
 `bf.sportsbook_lines`, `bf.game_state_timeline` — or `bf.dataset("closing-lines")`
-by public name. An MSF dataset by name is `bf.msf_dataset("game-state")`;
-`bf.dataset()` does not accept MSF names.
+by public name. A sports dataset by name is `bf.sports_dataset("game-state")`;
+`bf.dataset()` does not accept sports dataset names.
 
-MSF handles are `bf.game_state`, `bf.plays`, `bf.player_stats`, `bf.team_stats`
-and `bf.injuries`. They use the snapshot/revision protocol below, rather than
-the settled-artifact methods in this table.
+Sports data handles are `bf.game_state`, `bf.plays`, `bf.player_stats`,
+`bf.team_stats` and `bf.injuries`. They use the snapshot/revision protocol
+below, rather than the settled-artifact methods in this table. Before betflux
+0.10.0 the sports data names were `bf.msf_dataset()`, `MsfSnapshot`,
+`MsfRevision` and `MsfIntegrityError`; they still work but warn.
 
 | Method | Returns |
 |---|---|
@@ -134,8 +136,8 @@ with Client() as bf:
 - What a read cost, from the `x-betflux-game` and `x-betflux-games-remaining`
   response headers: `GameCost` (`outcome` is `new`, `already` or `exempt`,
   `counted` is the boolean form, `games_remaining`) as `.cost` on `GameRows`
-  (`query_game`), `GameTable`, `LiveSegments`, `LiveBoard`, `MsfSnapshot` and
-  `MsfRevision`; on progress events `GameDone.counted` (`True` for `new`,
+  (`query_game`), `GameTable`, `LiveSegments`, `LiveBoard`, `SportsDataSnapshot` and
+  `SportsDataRevision`; on progress events `GameDone.counted` (`True` for `new`,
   `False` for `already` or `exempt`, `None` when the gateway sent no header —
   an uncapped plan or an older gateway) and `GameDone.games_remaining`. After
   a range pull, `iter(...).games()` tallies `new`, `already`, `exempt` and
@@ -152,15 +154,15 @@ On a gateway without the preview or counted-games endpoints `preview_games`
 and `counted_games` raise `NotFoundError`; `usage()` raises it on a gateway
 without `/v1/me`, where `check_key()` still answers from a `/v1/leagues` probe.
 
-### MSF snapshots and changes
+### Sports data snapshots and changes
 
 The four game handles take a public game ID; `bf.injuries` takes `league=`.
 `snapshot()` returns rows, metadata, a cursor and the downloaded Arrow schema.
 `changes(cursor, ...)` yields a finite sequence of complete revisions through
 the first listing's high-water mark. `follow()` polls continuously, and waits
 at that edge. A game's snapshot and revision files count the game once per
-period like any other read of it (free once it is counted, and `MsfSnapshot`
-/ `MsfRevision` carry `.cost`); `injuries` counts nothing but needs a plan
+period like any other read of it (free once it is counted, and `SportsDataSnapshot`
+/ `SportsDataRevision` carry `.cost`); `injuries` counts nothing but needs a plan
 with `limits.league_datasets`. Each
 revision has `metadata`, `rows` and `.cursor`, even when `rows` is empty.
 
@@ -181,7 +183,7 @@ game). It first checks the cursor against the dataset and scope and makes one
 free changes listing, so a cursor for another stream (`ValueError`), a reset
 (409) or an expired cursor (410) fails before any download. `follow()` waits
 the `poll_after` the server advises between polls (`every=` overrides), from
-the first listing on. `MsfIntegrityError` means a downloaded file, hash, row
+the first listing on. `SportsDataIntegrityError` means a downloaded file, hash, row
 count, cursor or revision envelope failed validation; do not advance the saved
 cursor. An epoch reset (409) or expired cursor (410) requires a new snapshot;
 a filtered resume whose cursor snapshot is no longer retained raises the same
@@ -190,11 +192,11 @@ a filtered resume whose cursor snapshot is no longer retained raises the same
 `freshness(league=...)` and the archives — raises `PlanRequiredError` (403
 `plan-excludes`); a trial key reads game datasets only for first-weekend games
 and gets `ForbiddenError` `history-restricted` for any other date. See
-[msf.md](msf.md) for revision application and the generated dataset pages for
+[sports-data.md](sports-data.md) for revision application and the generated dataset pages for
 frozen column types.
 
 Each game and league a dataset listed by `bf.datasets()` covers is published
-from its first observation ([coverage.md](coverage.md#msf-feed-history)). A
+from its first observation ([coverage.md](coverage.md#sports-data-feed-history)). A
 covered scope with nothing published yet, usually a game that has not started,
 raises `NotFoundError` whose `.type` is
 `https://api.betflux.ai/problems/not-yet-available`, from `snapshot()`,
@@ -230,7 +232,7 @@ Common errors subclass `BetfluxError`; catch that base class for other API failu
 | `PaymentRequiredError` | 402 `subscription-required` — key valid, but account has no active subscription; response includes `upgrade_url` |
 | `ForbiddenError` | 403 — key revoked or suspended (`key-disabled`), or a game the plan may not read (`history-restricted`: a trial key asked for a game outside its first-weekend sample; `.extra["upgrade_url"]`) |
 | `PlanRequiredError` | 403 `plan-excludes` — a `ForbiddenError` subclass: the plan does not include `.feature` (live lines, league datasets); `.required_tiers` names the plans that do and `.upgrade_url` where to change plan. Never worth retrying on this key |
-| `NotFoundError` | 404 — unknown game/dataset, or league not covered; for MSF, `.type` `…/problems/not-yet-available` means nothing is published yet for that game or league |
+| `NotFoundError` | 404 — unknown game/dataset, or league not covered; for a sports dataset, `.type` `…/problems/not-yet-available` means nothing is published yet for that game or league |
 | `GameLiveError` | 404 `not-final` — the game is still live. A `NotFoundError` subclass; the dataset methods handle it for you |
 | `LiveCursorResetError` | 409 — the live log was rebuilt under the cursor; start over without one |
 | `LiveSegmentBehindError` | 409 on a listed segment URL — behind its listing; the dataset methods re-list for you |
@@ -239,7 +241,7 @@ Common errors subclass `BetfluxError`; catch that base class for other API failu
 | `QuotaExceededError` | 429 `quota-exhausted` — the period's games allowance is spent and `.game_id` would be a new game; games already counted stay readable. `.games_used`, `.games_allowance`, `.reset` (`YYYY-MM-DD`), `.reset_at` (instant) and `.upgrade_url`. Not retried |
 | `NetworkError` | transport failure |
 | `APIError` | other non-2xx |
-| `MsfIntegrityError` | an MSF file, hash, row count, cursor or revision envelope failed validation; do not advance the saved cursor |
+| `SportsDataIntegrityError` | a sports data file, hash, row count, cursor or revision envelope failed validation; do not advance the saved cursor |
 
 Rate limits, 5xx, and transport failures retry automatically with backoff that
 honors `Retry-After` (capped). Access errors are
