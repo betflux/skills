@@ -171,7 +171,7 @@ no cost headers prints no line rather than spending an extra request.
 
 | Form | Datasets |
 |---|---|
-| `--date-from` + `--date-to` (+ optional `--league`) | `closing-lines`, `market-results` |
+| `--date-from` + `--date-to` (+ optional `--league`) | `sportsbook-closing-lines`, `sportsbook-market-results` |
 | `--game <id>` | the four original datasets plus the sports datasets `game-state`, `plays`, `player-stats`, `team-stats` |
 | `--league <code>` without `--game` | `injuries` |
 
@@ -188,7 +188,7 @@ narrow game discovery on range queries, reducing downloads):
 | `--team` | the three lines datasets; matches home or away |
 | `--side` | the three lines datasets, e.g. `HOME`, `OVER` |
 | `--player-id` | Original line/result datasets, player stats and injuries |
-| `--outcome` | `market-results` only: `WON`, `LOST`, `PUSH`, `INDETERMINATE` |
+| `--outcome` | `sportsbook-market-results` only: `WON`, `LOST`, `PUSH`, `INDETERMINATE` |
 | `--metric` | Player/team stats; applies the reviewed restatement policy |
 | `--team-id` | Player/team stats and injuries |
 

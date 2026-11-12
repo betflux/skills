@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — 2026-11-12
+
+- Datasets about prices and bets are named for their venue:
+  `closing-lines` is now `sportsbook-closing-lines` and `market-results` is
+  now `sportsbook-market-results`. Their references move to
+  `references/datasets/sportsbook-closing-lines.md` and
+  `references/datasets/sportsbook-market-results.md`, and the CLI and Python
+  examples use betflux 0.11.0's names (`bf.sportsbook_closing_lines`,
+  `bf.sportsbook_market_results`). The old names still work in the API, the
+  CLI and the SDK, flagged deprecated. Needs betflux 0.11.0.
+
 ## 0.5.0 — 2026-10-28
 
 - The MSF datasets are now called sports data, so the skill no longer ties

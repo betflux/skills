@@ -12,10 +12,13 @@ yourself:
 - `clv_implied` = `opening_implied − closing_implied` (implied probability,
   vig included)
 
-Both are null when either end is missing.
+Both are null when either end is missing. From v10 the opening is the quote
+at the league's opening cutoff (`opening_method`, `opening_cutoff_ts`), not a
+look-ahead price posted weeks early; `first_quote_odds` keeps the first quote
+ever seen.
 
 ```bash
-betflux get closing-lines \
+betflux get sportsbook-closing-lines \
   --league NBA --date-from 2026-05-02 --date-to 2026-05-03 \
   --team "Detroit Pistons" \
   --columns game_date,operator,market_key,side,opening_odds,closing_odds,clv_odds \
@@ -48,7 +51,7 @@ Read the generated column reference; the ratio method has been removed.
 ## Did these bets win?
 
 ```bash
-betflux get market-results \
+betflux get sportsbook-market-results \
   --league MLB --date-from 2026-07-01 --date-to 2026-07-07 \
   --outcome WON \
   --columns game_date,market_key,side,outcome,settled_value
@@ -58,7 +61,7 @@ betflux get market-results \
 no trusted source could settle that exact question — it is not a loss, and
 dropping those rows silently will bias any hit-rate you compute.
 
-`market-results` includes NCAAM and NCAAF with beta grading limits.
+`sportsbook-market-results` includes NCAAM and NCAAF with beta grading limits.
 Box-score facts are available, but play-by-play is absent. Missing facts and unsupported
 questions remain `INDETERMINATE`; college overtime and operator rules are not
 comprehensively verified.
@@ -66,14 +69,14 @@ comprehensively verified.
 ## Model-ready frames
 
 A supervised setup wants three aligned pieces: features, binary outcomes, and
-the odds you would have gotten. `market-results` carries the outcomes and the
+the odds you would have gotten. `sportsbook-market-results` carries the outcomes and the
 closing price in one row, so it is the natural starting point:
 
 ```python
 from betflux import Client
 
 with Client() as bf:
-    rows = bf.market_results.rows(
+    rows = bf.sportsbook_market_results.rows(
         league="NBA", date_from="2026-05-03", date_to="2026-05-03",
     )
 

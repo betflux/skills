@@ -147,9 +147,9 @@ Discover games and confirm the requested dataset.
 betflux keys check --json                              # validate credentials; plan, limits, games left
 betflux datasets                                       # what's available
 betflux games --league NBA --date-from 2026-05-02 --date-to 2026-05-03 --cost
-betflux get closing-lines --game NBA_ORL_DET_20260503  # one game first
-betflux get closing-lines --league NBA --date-from 2026-05-02 --date-to 2026-05-03 --dry-run
-betflux get closing-lines --league NBA --date-from 2026-05-02 --date-to 2026-05-03
+betflux get sportsbook-closing-lines --game NBA_ORL_DET_20260503  # one game first
+betflux get sportsbook-closing-lines --league NBA --date-from 2026-05-02 --date-to 2026-05-03 --dry-run
+betflux get sportsbook-closing-lines --league NBA --date-from 2026-05-02 --date-to 2026-05-03
 betflux live-board MLB_WAS_DET_20260922                # in-progress game: current prices
 ```
 
@@ -157,8 +157,8 @@ betflux live-board MLB_WAS_DET_20260922                # in-progress game: curre
 
 | Dataset | Grain | Rows/game | Addressing |
 |---|---|---|---|
-| `closing-lines` | one row per (operator, market, selection, side) | ≈ 12,000 | range **or** `--game` |
-| `market-results` | closing lines + graded outcome | ≈ 12,000 | range **or** `--game` |
+| `sportsbook-closing-lines` | one row per (operator, market, selection, side) | ≈ 12,000 | range **or** `--game` |
+| `sportsbook-market-results` | closing lines + graded outcome | ≈ 12,000 | range **or** `--game` |
 | `sportsbook-lines` | every change-only line observation | **~190k** | `--game` only |
 | `game-state-timeline` (beta) | our estimate of the score, period, clock and situation, one row per change, with confidence | ≈ 200–1,500 | `--game` only |
 | `game-state` | latest source score, status, clock and period state | one | `--game` only |
@@ -197,7 +197,7 @@ faster re-downloads the same bytes), and resume a tail with `--cursor`
 (printed when it stops) or start one with `--from-now` — a bare rerun
 backfills the whole history.
 
-`market-results` includes NCAAM and NCAAF with beta grading limits:
+`sportsbook-market-results` includes NCAAM and NCAAF with beta grading limits:
 box-score facts are available, but play-by-play is absent; missing facts and unsupported
 questions remain `INDETERMINATE`. College overtime and operator rules are not
 comprehensively verified. `game-state-timeline` does not cover NCAAM or NCAAF.
@@ -227,8 +227,8 @@ front, before any download.
 |---|---|
 | `--league`, `--operator`, `--market-type`, `--team` | the three lines datasets |
 | `--side` | the three lines datasets |
-| `--player-id` | `closing-lines`, `market-results`, `sportsbook-lines`, `player-stats` and `injuries` |
-| `--outcome` (`WON`, `LOST`, `PUSH`, `INDETERMINATE`) | `market-results` |
+| `--player-id` | `sportsbook-closing-lines`, `sportsbook-market-results`, `sportsbook-lines`, `player-stats` and `injuries` |
+| `--outcome` (`WON`, `LOST`, `PUSH`, `INDETERMINATE`) | `sportsbook-market-results` |
 | `--metric` | `player-stats`, `team-stats`; applies reviewed restatement policy |
 | `--team-id` | `player-stats`, `team-stats` and `injuries` |
 | `--availability` | `injuries` in `live-tail` |
@@ -275,12 +275,12 @@ from betflux import Client
 
 with Client() as bf:
     games = bf.games(league="NBA", date_from="2026-05-02", date_to="2026-05-03")
-    rows = bf.closing_lines.game(games[0]["id"], operator="FANDUEL")
-    df = bf.closing_lines.df(league="NBA", date_from="2026-05-02", date_to="2026-05-03")
+    rows = bf.sportsbook_closing_lines.game(games[0]["id"], operator="FANDUEL")
+    df = bf.sportsbook_closing_lines.df(league="NBA", date_from="2026-05-02", date_to="2026-05-03")
 ```
 
 `df()` over a wide range downloads the selected games before returning, and
-each counts; `bf.closing_lines.preview(league=..., date_from=..., date_to=...)`
+each counts; `bf.sportsbook_closing_lines.preview(league=..., date_from=..., date_to=...)`
 says what it would cost first and `bf.usage()` is `/v1/me` typed. Details in
 `references/python.md`.
 
@@ -289,8 +289,8 @@ says what it would cost first and `bf.usage()` is `/v1/me` typed. Details in
 Read these only when the task needs them.
 
 - **[references/coverage.md](references/coverage.md)** — league/operator start dates, seasons, NFL weeks, and source-history limits
-- **[references/datasets/closing-lines.md](references/datasets/closing-lines.md)** — columns, filters, coverage
-- **[references/datasets/market-results.md](references/datasets/market-results.md)** — graded outcomes and settlement columns
+- **[references/datasets/sportsbook-closing-lines.md](references/datasets/sportsbook-closing-lines.md)** — columns, filters, coverage
+- **[references/datasets/sportsbook-market-results.md](references/datasets/sportsbook-market-results.md)** — graded outcomes and settlement columns
 - **[references/datasets/sportsbook-lines.md](references/datasets/sportsbook-lines.md)** — full line history
 - **[references/datasets/game-state-timeline.md](references/datasets/game-state-timeline.md)** — beta: estimated state rows, confidence columns, as-of joins
 - **[references/sports-data.md](references/sports-data.md)** — snapshot and revision protocol, CLI and SDK examples

@@ -73,7 +73,7 @@ One row per canonical player; `id` is the UUID behind the datasets' `*_player_id
 
 | Column | Type | Nullable | Description |
 |---|---|---|---|
-| `id` | `string` | no | Canonical player UUID (matches closing-lines `*_player_ids` and the `player_id` filter). |
+| `id` | `string` | no | Canonical player UUID (matches sportsbook-closing-lines `*_player_ids` and the `player_id` filter). |
 | `league` | `string` | no | League code the player belongs to. |
 | `first_name` | `string` | no | First name. |
 | `last_name` | `string` | no | Last name. |
@@ -97,7 +97,7 @@ One row per game: the public `id` every per-game endpoint takes plus the game re
 |---|---|---|---|
 | `id` | `string` | no | Game id (e.g. NBA_GSW_MIA_20250408). |
 | `league` | `string` | no | League code, e.g. NBA, NFL, MLB, NHL, NCAAM, NCAAF. |
-| `game_date` | `string` | no | Eastern-Time calendar date of the scheduled start (matches closing-lines game_date). |
+| `game_date` | `string` | no | Eastern-Time calendar date of the scheduled start (matches sportsbook-closing-lines game_date). |
 | `start_time` | `string` | no | Scheduled start, ISO 8601 UTC. |
 | `status` | `string` | no | Schedule status, e.g. SCHEDULED, STARTED, COMPLETED. |
 | `is_live` | `boolean` | no | True while the game is in progress. |

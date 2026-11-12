@@ -9,8 +9,8 @@ FanDuel, DraftKings, BetMGM, and Pinnacle all have retained priced markets
 for this game, with captures beginning September 29.
 
 Upcoming games count toward coverage once their odds have been retained.
-`sportsbook-lines` includes those pregame observations; `closing-lines` and
-`market-results` are published as games settle and processing completes.
+`sportsbook-lines` includes those pregame observations; `sportsbook-closing-lines` and
+`sportsbook-market-results` are published as games settle and processing completes.
 Box scores support NCAAF results, while questions requiring unavailable
 play-by-play remain `INDETERMINATE`. `game-state-timeline` is unavailable.
 
@@ -34,8 +34,8 @@ containing only errors or metadata do not count.
 | NCAAF | 2026-10-01 | 2026 regular season |
 
 These dates describe the source history behind the odds datasets
-(`closing-lines`, `sportsbook-lines`, and the odds component of
-`market-results`). They do not establish that every game, operator, market,
+(`sportsbook-closing-lines`, `sportsbook-lines`, and the odds component of
+`sportsbook-market-results`). They do not establish that every game, operator, market,
 or derived Parquet file is available from that date onward. Stats backfills
 can reach earlier than odds; they do not establish earlier sportsbook coverage
 or the start of `game-state-timeline`.
@@ -104,7 +104,7 @@ a dataset artifact.
 
 ```bash
 betflux games --league NFL --date-from 2025-10-16 --date-to 2025-10-19
-betflux get closing-lines --game NFL_PIT_CIN_20251016 --operator FANDUEL
+betflux get sportsbook-closing-lines --game NFL_PIT_CIN_20251016 --operator FANDUEL
 ```
 
 The NFL Week 7 label is recorded in the source box score and corroborated by

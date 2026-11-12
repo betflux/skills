@@ -49,8 +49,8 @@ columns and the rule are in [reference-data.md](reference-data.md).
 
 ### Datasets
 
-Handles hang off the client — `bf.closing_lines`, `bf.market_results`,
-`bf.sportsbook_lines`, `bf.game_state_timeline` — or `bf.dataset("closing-lines")`
+Handles hang off the client — `bf.sportsbook_closing_lines`, `bf.sportsbook_market_results`,
+`bf.sportsbook_lines`, `bf.game_state_timeline` — or `bf.dataset("sportsbook-closing-lines")`
 by public name. A sports dataset by name is `bf.sports_dataset("game-state")`;
 `bf.dataset()` does not accept sports dataset names.
 
@@ -77,7 +77,7 @@ below, rather than the settled-artifact methods in this table. Before betflux
 | `.live_urls(game_id)` | `sportsbook_lines` only: segment URLs for DuckDB |
 
 ```python
-for row in bf.closing_lines.iter(
+for row in bf.sportsbook_closing_lines.iter(
     league="NBA", date_from="2026-05-01", date_to="2026-06-30",
     operator="FANDUEL",     # local filter
     max_rows=10_000,        # matching output rows, not downloaded rows
@@ -103,12 +103,12 @@ with Client() as bf:
     usage.plan.label, usage.limits.games_per_period, usage.limits.live
     usage.games_used, usage.games_remaining, usage.resets_at, usage.upgrade_url
 
-    preview = bf.closing_lines.preview(league="NBA", date_from="2026-05-01", date_to="2026-05-07")
+    preview = bf.sportsbook_closing_lines.preview(league="NBA", date_from="2026-05-01", date_to="2026-05-07")
     preview.new, preview.already, preview.exempt, preview.fits, preview.over_by
     if preview.fits:
-        rows = bf.closing_lines.rows(games=list(preview.games))   # exactly what was previewed
+        rows = bf.sportsbook_closing_lines.rows(games=list(preview.games))   # exactly what was previewed
     else:
-        rows = bf.closing_lines.rows(games=preview.fitting())      # the part the allowance covers
+        rows = bf.sportsbook_closing_lines.rows(games=preview.fitting())      # the part the allowance covers
 
     for game in bf.counted_games(league="NBA"):                     # free to read again
         game.game_id, game.first_read_at, game.first_dataset, game.cost   # "counted" | "exempt"
@@ -298,7 +298,7 @@ it to render its stderr bar. Pass `on_progress=` to `Client`.
 Download one file with the CLI, then use DuckDB locally to reuse it across queries.
 
 ```bash
-betflux get closing-lines --game NBA_ORL_DET_20260503 --output closing.parquet
+betflux get sportsbook-closing-lines --game NBA_ORL_DET_20260503 --output closing.parquet
 ```
 
 ```sql
