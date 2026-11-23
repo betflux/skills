@@ -2,13 +2,13 @@
 
 # sportsbook-closing-lines
 
-The sportsbook closing lines dataset · 50 columns · ~12,000 rows per game
+The sportsbook closing lines dataset · 58 columns · ~12,000 rows per game
 
 | | |
 |---|---|
 | Leagues | MLB, NBA, NHL, NFL, NCAAM, NCAAF |
 | Addressing | date range **or** `--game` |
-| Filters | `league`, `operator`, `market_type`, `team`, `mainline`, `side`, `player_id` |
+| Filters | `league`, `operator`, `market_type`, `team`, `mainline`, `side`, `player_id`, `outcome_key`, `settlement_key` |
 
 ## Columns
 
@@ -33,12 +33,12 @@ The sportsbook closing lines dataset · 50 columns · ~12,000 rows per game
 | `opening_spread` | `number` | yes | Point spread (handicap) at open; null for non-spread markets. |
 | `opening_total` | `number` | yes | Total (over/under line) at open; null for non-total markets. |
 | `opening_ts` | `string` | yes | Timestamp of the opening quote, ISO-8601 UTC; it can be before `opening_cutoff_ts` when the book held that quote through the cutoff. |
-| `closing_odds` | `integer` | yes | American odds of the last eligible active quote strictly before game_start; null when no eligible pre-game quote exists. |
-| `closing_decimal` | `number` | yes | Decimal odds at close. |
-| `closing_implied` | `number` | yes | Implied probability at close (vig included, 0-1). |
-| `closing_spread` | `number` | yes | Point spread (handicap) at close. |
-| `closing_total` | `number` | yes | Total (over/under line) at close. |
-| `closing_ts` | `string` | yes | Timestamp of the last eligible active pre-game quote, ISO-8601 UTC; null when no eligible pre-game quote exists. |
+| `closing_odds` | `integer` | yes | American odds of the last eligible active quote strictly before game_start. Null when no eligible pre-game quote exists, and from v8 when the book had no observation for the game, in any market, in the 24 hours before game_start: its last quote is stale, not a close. From v10 that test is per operator event, so when a book deleted its event and relisted the game under a new one, the old event's selections have no close. Games built before v8 carry the stale quote here. A selection first seen at or after game_start has no row from v6, so it never appears with a null close. |
+| `closing_decimal` | `number` | yes | Decimal odds at close. Null whenever closing_odds is null (see closing_odds). |
+| `closing_implied` | `number` | yes | Implied probability at close (vig included, 0-1). Null whenever closing_odds is null (see closing_odds). |
+| `closing_spread` | `number` | yes | Point spread (handicap) at close; null for non-spread markets. Null whenever closing_odds is null (see closing_odds). |
+| `closing_total` | `number` | yes | Total (over/under line) at close; null for non-total markets. Null whenever closing_odds is null (see closing_odds). |
+| `closing_ts` | `string` | yes | Timestamp of the last eligible active pre-game quote, ISO-8601 UTC. Null whenever closing_odds is null (see closing_odds). |
 | `min_odds` | `integer` | yes | Lowest American odds observed across all records, pre-game and live. |
 | `max_odds` | `integer` | yes | Highest American odds observed across all records, pre-game and live. |
 | `distinct_odds_count` | `integer` | yes | Number of distinct American-odds values observed. |
@@ -55,7 +55,7 @@ The sportsbook closing lines dataset · 50 columns · ~12,000 rows per game
 | `selection_metric` | `string` | yes | Structured metric for the priced selection; set only for method-of-score selections, else null. |
 | `market_external_id` | `string` | no | Operator's market id — the identity of the market within (game, operator); `market_key` is `operator` + `:` + this value. Same value as `market_external_id` on sportsbook-market-results and sportsbook-lines. |
 | `market_name` | `string` | yes | Operator's market label, e.g. `Run Line Alternate`; display only. |
-| `selection_external_id` | `string` | no | Operator's selection id — the row identity together with `market_key` and `side`. For FanDuel main markets it is stable and the line moves on it (one row, opening → closing). DraftKings, BetMGM, Pinnacle and FanDuel alternates mint a new id per line value, so one market carries several rows per side and a moved line is a new row with opening == closing. |
+| `selection_external_id` | `string` | no | Operator's selection id — the row identity together with `market_key` and `side`. DraftKings, BetMGM, Pinnacle game lines and FanDuel alternates mint a new id per line value, so one market carries several rows per side and a moved line is a new row with opening == closing. FanDuel main, period and team-total lines and player over/unders, and Pinnacle player props, keep one id while the line moves: from v15 an id quoted on more than one line before game_start has no row; earlier versions give it one row whose opening and close can be on different lines. |
 | `is_mainline` | `boolean` | yes | True when the selection belongs to the operator's primary (non-alternate) full-game spread, moneyline or total as of the closing quote — the headline line, not a rung of the alternate ladder. Period lines, team totals and props are false. Null on games built before v7. |
 | `opening_method` | `string` | yes | How the opening quote was chosen: AS_OF_CUTOFF (the quote the book was showing at `opening_cutoff_ts`, the book being captured for this event in the 24 hours before it) or FIRST_AFTER_CUTOFF (the first quote after the cutoff and before game_start). Null when there is no opening, and on games built before v10. |
 | `opening_cutoff_ts` | `string` | yes | The league's opening cutoff for this game, ISO-8601 UTC: Monday 08:00 ET after the previous NFL Sunday, Sunday 12:00 ET after the previous NCAAF Saturday, else 48 hours before game_start (adr-0096). Null on games built before v10. |
@@ -63,4 +63,12 @@ The sportsbook closing lines dataset · 50 columns · ~12,000 rows per game
 | `first_quote_implied` | `number` | yes | Implied probability of the first quote ever seen (vig included, 0-1). Null on games built before v10. |
 | `first_quote_spread` | `number` | yes | Point spread of the first quote ever seen; null for non-spread markets and on games built before v10. |
 | `first_quote_total` | `number` | yes | Total of the first quote ever seen; null for non-total markets and on games built before v10. |
+| `outcome_key` | `string` | yes | Same-result key: a 16-character hash shared by every quote, at any book or exchange, that pays on the same game result (same game, player or team, stat, period, clock window, and the range in outcome_min, outcome_max and outcome_push, or the parity in outcome_parity). Null for markets without a single range of results: either-team margin bands, quarter lines (x.25, x.75), Tie No, and first-scorer, most-of, race-to and method markets. Null on games built before v11. |
+| `settlement_key` | `string` | yes | Same-price key: outcome_key plus the venue's rules for the unusual cases that can change this bet (overtime, a player who does not take part, a shortened game, a result on the line), read for a straight bet at the time of the quote. Quotes sharing it are the same contract, so their prices compare directly. Null when outcome_key is null, when a rule it needs is not stated (terms_status unknown), and for venues without registered rules. Null on games built before v11. |
+| `outcome_min` | `number` | yes | The lowest result that wins, in whole steps of the stat: Over 25.5 is 26. For moneylines, spreads and winning margins the result is the score margin between the game's two teams, ordered by team id. For overtime markets the result is the number of overtime periods (extra innings in MLB) played: 'reaches overtime' Yes is 1, No has outcome_max 0. Null when unbounded below or unkeyed. |
+| `outcome_max` | `number` | yes | The highest result that wins, as outcome_min. Null when unbounded above or unkeyed. |
+| `outcome_push` | `number` | yes | The result that neither wins nor loses: a whole-number line, or a level score on a two-way moneyline. Null when there is none. |
+| `terms_status` | `string` | yes | How the rules in settlement_key are known: verified (the venue's own text), inferred (a general clause or other venues' text), unknown (a needed rule is not stated; settlement_key is null). Null on games built before v11. |
+| `outcome_parity` | `string` | yes | For odd/even markets, the result that wins: odd or even, on the game's combined score or the one team's score (0 counts as even). outcome_min, outcome_max and outcome_push are then null. Null for every other market and when unkeyed. Null on games built before v13. |
+| `offer_key` | `string` | yes | Same-offer key: a 16-character hash of market_key, selection_external_id and the line the venue quoted (its own line field, else spread, else total), so it names one bet at one line at one venue. Some books keep a selection id while the line moves under it (FanDuel main and period lines, team totals and player over/unders; Pinnacle player props); each line is then a new offer_key under one selection_external_id. Here, the offer of the closing quote. From v15 a selection quoted on more than one line before game_start has no row, so every pre-game quote behind a row is on this one offer and its offer_key matches the selection's pre-game rows in sportsbook-lines. Null on games built before v14. |
 | `dataset_version` | `string` | yes | Version of the dataset this game's file was built at, e.g. `v5`. Games in one pull can differ: versions of a compatibility line only add columns or carry documented changes (see `versions` on /v1/datasets). Columns added after a game's version read null for it. Files built before this column existed lack it entirely (null when read with DuckDB `union_by_name = true`); the `X-Betflux-Dataset-Version` response header still names their version. |

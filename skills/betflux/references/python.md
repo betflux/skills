@@ -50,7 +50,8 @@ columns and the rule are in [reference-data.md](reference-data.md).
 ### Datasets
 
 Handles hang off the client — `bf.sportsbook_closing_lines`, `bf.sportsbook_market_results`,
-`bf.sportsbook_lines`, `bf.game_state_timeline` — or `bf.dataset("sportsbook-closing-lines")`
+`bf.sportsbook_lines`, `bf.game_state_timeline`, `bf.prediction_market_closing_lines`,
+`bf.prediction_market_results`, `bf.prediction_market_lines` — or `bf.dataset("sportsbook-closing-lines")`
 by public name. A sports dataset by name is `bf.sports_dataset("game-state")`;
 `bf.dataset()` does not accept sports dataset names.
 
@@ -70,11 +71,11 @@ below, rather than the settled-artifact methods in this table. Before betflux
 | `.df(**kwargs)` | pandas DataFrame (needs the `pandas` extra) |
 | `.validate_filters(**filters)` | raises `ValueError` for a filter the dataset lacks, without fetching |
 | `.raw(game_id)` | the Parquet bytes — verbatim for a settled game; a live game's are its segments stitched and re-encoded by the SDK |
-| `.is_live(game_id)` | `sportsbook_lines` only: is the game being served live (any 404 reads as no) |
-| `.live_segments(game_id, cursor)` | `sportsbook_lines` only: one poll step |
-| `.live_cursor(game_id)` | `sportsbook_lines` only: the current position, one free listing |
-| `.live_board(game_id, operator=None)` | `sportsbook_lines` only: the current board |
-| `.live_urls(game_id)` | `sportsbook_lines` only: segment URLs for DuckDB |
+| `.is_live(game_id)` | `sportsbook_lines` and `prediction_market_lines` only: is the game being served live (any 404 reads as no) |
+| `.live_segments(game_id, cursor)` | `sportsbook_lines` and `prediction_market_lines` only: one poll step |
+| `.live_cursor(game_id)` | `sportsbook_lines` and `prediction_market_lines` only: the current position, one free listing |
+| `.live_board(game_id, operator=None)` | `sportsbook_lines` and `prediction_market_lines` only: the current board |
+| `.live_urls(game_id)` | `sportsbook_lines` and `prediction_market_lines` only: segment URLs for DuckDB |
 
 ```python
 for row in bf.sportsbook_closing_lines.iter(
@@ -90,6 +91,16 @@ for row in bf.sportsbook_closing_lines.iter(
 not downloaded games. Local filters may match no rows in a file. Team and league
 filters also narrow game discovery on range queries.
 
+A range takes `league`, `date_from` and `date_to` together (`ValueError`
+otherwise), or `games=[...]` instead. During a range `iter()`, a game with no
+file for the dataset (not settled yet, or not served for it) is skipped
+silently (a `GameSkipped` progress event, no exception); `game()` or `raw()` on
+that game raises `NotFoundError`. Do not treat a range result as complete:
+compare the `game_id`s it returned with `bf.games(...)` for the same range.
+Range discovery calls `/v1/games`, which allows at most 366 days per query
+(400 `validation-error`, raised as `APIError`); the SDK does not split a
+longer range, so loop over pieces of a year or less.
+
 ### Limits and cost
 
 Usage is metered in distinct games per billing period: a game counts once, on
@@ -103,15 +114,15 @@ with Client() as bf:
     usage.plan.label, usage.limits.games_per_period, usage.limits.live
     usage.games_used, usage.games_remaining, usage.resets_at, usage.upgrade_url
 
-    preview = bf.sportsbook_closing_lines.preview(league="NBA", date_from="2026-05-01", date_to="2026-05-07")
-    preview.new, preview.already, preview.exempt, preview.fits, preview.over_by
+    preview = bf.sportsbook_closing_lines.preview(league="NBA", date_from="2026-05-02", date_to="2026-05-03")
+    preview.new, preview.already, preview.fits, preview.over_by
     if preview.fits:
         rows = bf.sportsbook_closing_lines.rows(games=list(preview.games))   # exactly what was previewed
     else:
         rows = bf.sportsbook_closing_lines.rows(games=preview.fitting())      # the part the allowance covers
 
     for game in bf.counted_games(league="NBA"):                     # free to read again
-        game.game_id, game.first_read_at, game.first_dataset, game.cost   # "counted" | "exempt"
+        game.game_id, game.first_read_at, game.first_dataset, game.cost   # "counted"
 ```
 
 - `Usage` (`bf.usage()`): `tier`, `plan` (`label`, `size`), `limits`
@@ -119,29 +130,30 @@ with Client() as bf:
   `free_recent_game_days`, `max_keys`, `live`, `league_datasets`, `sample`),
   `period_start`, `resets_at`, `games_used`, `games_allowance`,
   `games_remaining`, `games_exempt`, `rows_used`, `counted_by_league`,
-  `upgrade_url`, and `raw` (the body as served). `metered` is `False` on a
+  `upgrade_url`, and `raw` (the body as served). Every game counts, so
+  `free_recent_game_days` is always `None` and `games_exempt` always `0`; they
+  stay for code that reads them. `metered` is `False` on a
   gateway from before games metering, and then every games field is `None`.
   `check_key()` returns the same facts as a plain dict beside its legacy keys.
 - `GamesPreview` (`bf.preview_games(ids)`, `Dataset.preview(...)`): `games`
   maps each id to `new` (would count), `already` (counted this period, free),
-  `exempt` (within the plan's recent-game window, free), `restricted` (outside
-  the free sample, refused) or `invalid`; `new`/`already`/`exempt`/
-  `restricted`/`invalid` are the counts; `fits` and `over_by`
+  `restricted` (outside the free sample, refused) or `invalid`;
+  `new`/`already`/`restricted`/`invalid` are the counts (`exempt` stays,
+  always 0); `fits` and `over_by`
   compare the new games with `games_remaining`; `fitting()` is the ids the
   allowance covers, in order. Ids are posted to `/v1/me/games/preview` in
   chunks of at most 5,000 and nothing is counted by asking.
 - `CountedGame` (`bf.counted_games(league=, date_from=, date_to=)`): pages
-  through `GET /v1/me/games`, newest read first; `cost` is `counted` or
-  `exempt`.
+  through `GET /v1/me/games`, newest read first; `cost` is `counted`.
 - What a read cost, from the `x-betflux-game` and `x-betflux-games-remaining`
-  response headers: `GameCost` (`outcome` is `new`, `already` or `exempt`,
+  response headers: `GameCost` (`outcome` is `new` or `already`,
   `counted` is the boolean form, `games_remaining`) as `.cost` on `GameRows`
   (`query_game`), `GameTable`, `LiveSegments`, `LiveBoard`, `SportsDataSnapshot` and
   `SportsDataRevision`; on progress events `GameDone.counted` (`True` for `new`,
-  `False` for `already` or `exempt`, `None` when the gateway sent no header —
+  `False` for `already`, `None` when the gateway sent no header —
   an uncapped plan or an older gateway) and `GameDone.games_remaining`. After
-  a range pull, `iter(...).games()` tallies `new`, `already`, `exempt` and
-  `unknown` per distinct game.
+  a range pull, `iter(...).games()` tallies `new`, `already` and `unknown` per
+  distinct game.
 - `Dataset.iter(games=[...])` pulls explicit ids instead of discovering a
   range; `_iter_rows` is the only multi-game loop, so `rows()` and `df()`
   take `games=` too. A live game whose segments the plan excludes (403
@@ -229,7 +241,7 @@ Common errors subclass `BetfluxError`; catch that base class for other API failu
 | Exception | Cause |
 |---|---|
 | `AuthError` | 401 — key missing, malformed, unrecognized |
-| `PaymentRequiredError` | 402 `subscription-required` — key valid, but account has no active subscription; response includes `upgrade_url` |
+| `PaymentRequiredError` | 402 `subscription-required` — rare and brief: the key's record was cached before the account's plan was known; retry in a few minutes |
 | `ForbiddenError` | 403 — key revoked or suspended (`key-disabled`), or a game the plan may not read (`history-restricted`: a trial key asked for a game outside its first-weekend sample; `.extra["upgrade_url"]`) |
 | `PlanRequiredError` | 403 `plan-excludes` — a `ForbiddenError` subclass: the plan does not include `.feature` (live lines, league datasets); `.required_tiers` names the plans that do and `.upgrade_url` where to change plan. Never worth retrying on this key |
 | `NotFoundError` | 404 — unknown game/dataset, or league not covered; for a sports dataset, `.type` `…/problems/not-yet-available` means nothing is published yet for that game or league |
@@ -240,7 +252,7 @@ Common errors subclass `BetfluxError`; catch that base class for other API failu
 | `RateLimitError` | 429 `rate-limited` — per-minute limit; retried for you after `Retry-After` |
 | `QuotaExceededError` | 429 `quota-exhausted` — the period's games allowance is spent and `.game_id` would be a new game; games already counted stay readable. `.games_used`, `.games_allowance`, `.reset` (`YYYY-MM-DD`), `.reset_at` (instant) and `.upgrade_url`. Not retried |
 | `NetworkError` | transport failure |
-| `APIError` | other non-2xx |
+| `APIError` | other non-2xx, e.g. 400 `validation-error` for a `/v1/games` range over 366 days |
 | `SportsDataIntegrityError` | a sports data file, hash, row count, cursor or revision envelope failed validation; do not advance the saved cursor |
 
 Rate limits, 5xx, and transport failures retry automatically with backoff that

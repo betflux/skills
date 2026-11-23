@@ -93,6 +93,8 @@ One row per game: the public `id` every per-game endpoint takes plus the game re
 | Python | `bf.games(league="NBA", date_from="2026-05-01", date_to="2026-05-07")` · `bf.game("<game_id>")` |
 | Filters | `league`, `date_from`, `date_to`, `team`, `status` |
 
+`date_from` and `date_to` go together (both or neither) and may be at most 366 days apart; anything else is 400 `validation-error`. The CLI and SDK send the range as given and do not split it, and a date-range `betflux get` or `iter()` lists its games here, so split a longer range into pieces of a year or less.
+
 | Column | Type | Nullable | Description |
 |---|---|---|---|
 | `id` | `string` | no | Game id (e.g. NBA_GSW_MIA_20250408). |

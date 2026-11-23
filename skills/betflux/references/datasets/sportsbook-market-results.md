@@ -2,18 +2,13 @@
 
 # sportsbook-market-results
 
-The sportsbook market results dataset · 31 columns · ~12,000 rows per game
+The sportsbook market results dataset · 44 columns · ~12,000 rows per game
 
 | | |
 |---|---|
 | Leagues | MLB, NBA, NHL, NFL, NCAAM, NCAAF |
 | Addressing | date range **or** `--game` |
-| Filters | `league`, `operator`, `market_type`, `team`, `mainline`, `side`, `outcome`, `player_id` |
-
-> Only 11 of 31 columns carry descriptions — this dataset's row
-> schema is declared as column tuples rather than described fields. Types
-> and nullability below are authoritative; a blank description means not
-> yet written, not "no meaning".
+| Filters | `league`, `operator`, `market_type`, `team`, `mainline`, `side`, `outcome`, `player_id`, `outcome_key`, `settlement_key` |
 
 ## Columns
 
@@ -31,7 +26,7 @@ The sportsbook market results dataset · 31 columns · ~12,000 rows per game
 | `period` | `string` | no |  |
 | `structure` | `string` | no |  |
 | `market_name` | `string` | no |  |
-| `selection_external_id` | `string` | no |  |
+| `selection_external_id` | `string` | no | Operator's selection id. From v17 a row is one offer (`offer_key`: this id at one line), so an id on which the book moved the line (FanDuel, Pinnacle player props) carries a row per line it held. Before v17 it was one row, at the line of its close. |
 | `selection_name` | `string` | yes |  |
 | `side` | `string[]` | yes |  |
 | `spread` | `number` | yes |  |
@@ -43,10 +38,23 @@ The sportsbook market results dataset · 31 columns · ~12,000 rows per game
 | `closing_odds` | `integer` | yes | American odds of the last eligible active quote strictly before game_start; null when no eligible pre-game quote exists. |
 | `closing_implied` | `number` | yes | Implied probability (vig included, 0-1) of the last eligible active quote strictly before game_start; null when no eligible pre-game quote exists. |
 | `closing_ts` | `string` | yes | Timestamp of the last eligible active quote strictly before game_start; null when no eligible pre-game quote exists. |
-| `outcome` | `string` | no | WON, LOST, PUSH (stake returned), or INDETERMINATE. Tied leaders in most-stat markets are INDETERMINATE while fractional settlement is unsupported. |
+| `outcome` | `string` | no | WON, LOST, PUSH (the bet had action; stake returned), VOID (the bet never had action, e.g. the player did not take part; stake returned), PARTIAL (part won or refunded, see the stake fractions), or INDETERMINATE (we cannot settle it). From v12, tied leaders in a most-of market are PARTIAL (settlement_rule dead_heat) by the book's dead-heat rule, and from v13 a DraftKings tie between the two selections of a two-selection market is a PUSH; a tie the book's rules do not settle stays INDETERMINATE. |
 | `settled_value` | `number` | yes |  |
 | `settled_value_bool` | `integer` | yes |  |
-| `graded_at` | `string` | no | UTC timestamp (Parquet timestamptz). |
+| `graded_at` | `string` | no | Deprecated: the same value as settled_at. Will be removed in a future breaking version. |
 | `market_key` | `string` | no | Global market identity: `OPERATOR:market_external_id` — the operator code plus the operator's own market id. Join key across sportsbook-closing-lines, sportsbook-market-results and sportsbook-lines. |
-| `is_mainline` | `boolean` | yes | True when the graded selection belongs to the operator's primary (non-alternate) full-game spread, moneyline or total at its closing quote. Period lines, team totals and props are false. Null on games built before v5. |
+| `is_mainline` | `boolean` | yes | True when the settled selection belongs to the operator's primary (non-alternate) full-game spread, moneyline or total at its closing quote. Period lines, team totals and props are false. Null on games built before v5. |
+| `settled_at` | `string` | yes | When the row was settled. Null on games built before v10 (use graded_at there). |
+| `stake_won_fraction` | `number` | yes | Share of the stake settled as a win at the quoted price: 1 for WON, 0 for LOST, PUSH and VOID, between for PARTIAL. Null when INDETERMINATE and on games built before v10. |
+| `stake_refunded_fraction` | `number` | yes | Share of the stake returned: 1 for PUSH and VOID, 0 for WON and LOST, between for PARTIAL. Null when INDETERMINATE and on games built before v10. |
+| `settlement_rule` | `string` | yes | Which settlement term decided the outcome: result, tie, no_winner, player_dnp, dead_heat, split_line, not_started, early_exit, game_incomplete, period_incomplete, market_void, fair_price, operator_result. Null when INDETERMINATE and on games built before v10. |
+| `settlement_source` | `string` | yes | Who determined the result: derived (BetFlux, from official game facts) or operator_reported. Null when INDETERMINATE and on games built before v10. |
+| `outcome_key` | `string` | yes | Same-result key: a 16-character hash shared by every quote, at any book or exchange, that pays on the same game result (same game, player or team, stat, period, clock window, and the range in outcome_min, outcome_max and outcome_push, or the parity in outcome_parity). Null for markets without a single range of results: either-team margin bands, quarter lines (x.25, x.75), Tie No, and first-scorer, most-of, race-to and method markets. Null on games built before v13. |
+| `settlement_key` | `string` | yes | Same-price key: outcome_key plus the venue's rules for the unusual cases that can change this bet (overtime, a player who does not take part, a shortened game, a result on the line), read for a straight bet at the time of the quote. Quotes sharing it are the same contract, so their prices compare directly. Null when outcome_key is null, when a rule it needs is not stated (terms_status unknown), and for venues without registered rules. Null on games built before v13. |
+| `outcome_min` | `number` | yes | The lowest result that wins, in whole steps of the stat: Over 25.5 is 26. For moneylines, spreads and winning margins the result is the score margin between the game's two teams, ordered by team id. For overtime markets the result is the number of overtime periods (extra innings in MLB) played: 'reaches overtime' Yes is 1, No has outcome_max 0. Null when unbounded below or unkeyed. |
+| `outcome_max` | `number` | yes | The highest result that wins, as outcome_min. Null when unbounded above or unkeyed. |
+| `outcome_push` | `number` | yes | The result that neither wins nor loses: a whole-number line, or a level score on a two-way moneyline. Null when there is none. |
+| `terms_status` | `string` | yes | How the rules in settlement_key are known: verified (the venue's own text), inferred (a general clause or other venues' text), unknown (a needed rule is not stated; settlement_key is null). Null on games built before v13. |
+| `outcome_parity` | `string` | yes | For odd/even markets, the result that wins: odd or even, on the game's combined score or the one team's score (0 counts as even). outcome_min, outcome_max and outcome_push are then null. Null for every other market and when unkeyed. Null on games built before v15. |
+| `offer_key` | `string` | yes | Same-offer key: a 16-character hash of market_key, selection_external_id and the line the venue quoted (its own line field, else spread, else total), so it names one bet at one line at one venue. Some books keep a selection id while the line moves under it (FanDuel main and period lines, team totals and player over/unders; Pinnacle player props); each line is then a new offer_key under one selection_external_id. From v17 each row is one offer, and this joins it to sportsbook-lines, and to sportsbook-closing-lines for a selection quoted on one line before game_start. In v16 it is the settled quote's offer: the closing quote, or the last one for a selection quoted only in-game. Null on games built before v16. |
 | `dataset_version` | `string` | yes | Version of the dataset this game's file was built at, e.g. `v5`. Games in one pull can differ: versions of a compatibility line only add columns or carry documented changes (see `versions` on /v1/datasets). Columns added after a game's version read null for it. Files built before this column existed lack it entirely (null when read with DuckDB `union_by_name = true`); the `X-Betflux-Dataset-Version` response header still names their version. |

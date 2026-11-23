@@ -1,13 +1,14 @@
 ---
 name: betflux
-description: Discover and query BetFlux sportsbook datasets and sports data (game state, plays, stats, injuries) through its CLI, Python SDK, or HTTP API. Use for BetFlux data access, live game state, plays, stats, injuries, historical odds analysis, closing line value, dataset exploration, and checking what a BetFlux key may read and what a pull will cost.
+description: Discover and query BetFlux sportsbook and prediction-market (Kalshi, Polymarket) datasets and sports data (game state, plays, stats, injuries) through its CLI, Python SDK, or HTTP API. Use for BetFlux data access, live game state, plays, stats, injuries, historical odds analysis, closing line value, dataset exploration, and checking what a BetFlux key may read and what a pull will cost.
 ---
 
 # BetFlux
 
 Normalized US sportsbook odds, served as per-game Parquet files. Leagues: NFL,
-NBA, MLB, NHL, NCAAM. The audited odds history includes FanDuel, DraftKings, BetMGM,
-and Pinnacle.
+NBA, MLB, NHL, NCAAM, NCAAF. The audited odds history includes FanDuel, DraftKings, BetMGM,
+and Pinnacle; the prediction-market datasets cover the exchanges Kalshi and
+Polymarket.
 
 ## Setup
 
@@ -53,8 +54,6 @@ name.
 - A game counts once per period, on its first successful read of any of its
   datasets, a partial (Range) read included. Re-reads of a counted game, its
   other datasets, listings, reference data and `injuries` are free.
-- Games dated within `limits.free_recent_game_days` are free (`exempt`) on
-  plans that have that window.
 - At the cap only a *new* game is refused (429 `quota-exhausted`); every game
   already counted stays readable until `usage.resets_at`.
 - On a trial key (`limits.sample` is set) only first-weekend games can be read:
@@ -75,7 +74,7 @@ Habits:
 1. Run `betflux keys check --json` when a task starts and before any
    multi-game job; budget against `usage.games_remaining` (null means no cap).
 2. Run `betflux get … --dry-run` before a range pull. It prints what the pull
-   would cost (new, already counted, exempt) and whether it fits, and
+   would cost (new or already counted) and whether it fits, and
    downloads nothing. Ask the user before spending more than a quarter of what
    is left. A pull that would not fit aborts by itself unless
    `--allow-partial` is given.
@@ -84,7 +83,7 @@ Habits:
 4. Prefer games already counted this period, since they are free: `betflux
    usage games` lists them and `betflux games --cost` marks them
    (`free_to_read`). One game answers many questions at no extra cost.
-5. Skip `live-board`, `live-tail` and live `sportsbook-lines` reads when
+5. Skip `live-board`, `live-tail` and live lines reads when
    `limits.live` is false, and `get injuries` when `limits.league_datasets`
    is false.
 6. Stop on 429 `quota-exhausted` instead of retrying. Keep working with the
@@ -106,8 +105,19 @@ match nothing, every game in the range can still be downloaded, and each one
 counts. Results may end mid-game or mid-date; do not treat a limited sample as
 a complete period.
 
+A range query skips, without an error, every game in the range that has no
+file for that dataset (not settled yet, or not served for it); only a
+single-game `--game` read of such a game fails (404). Do not treat a range
+result as complete: compare the games it returned against `betflux games`
+for the same range.
+
+A range is discovered through `/v1/games`, which takes at most 366 days per
+query (400 `validation-error` beyond that). The CLI and SDK do not split a
+longer range: split it into pieces of a year or less yourself, for `games` and
+`get` alike.
+
 Start with one game or day to confirm the shape before widening the query.
-`sportsbook-lines` and `game-state-timeline` support `--game` only.
+`sportsbook-lines`, `prediction-market-lines` and `game-state-timeline` support `--game` only.
 The sports datasets `game-state`, `plays`, `player-stats`, and `team-stats` use one `--game`;
 `injuries` uses one `--league`. They serve current snapshots and complete
 revision feeds, with local filters. They exist only where sports data is
@@ -127,7 +137,8 @@ a loop. The exception is a game that started before 2025-01-01 00:00 UTC: it is
 listed but never will be published. `live-tail` already waits for a first publication by itself (it prints
 a `waiting:` line each interval).
 
-A game that has not settled yet has no final `sportsbook-lines` file. `get`
+A game that has not settled yet has no final `sportsbook-lines` or
+`prediction-market-lines` file. `get`
 still returns its rows — assembled from the live feed — and prints a
 `provisional:` line on stderr. Say so when reporting such rows: the final
 build may revise them.
@@ -157,15 +168,25 @@ betflux live-board MLB_WAS_DET_20260922                # in-progress game: curre
 
 | Dataset | Grain | Rows/game | Addressing |
 |---|---|---|---|
-| `sportsbook-closing-lines` | one row per (operator, market, selection, side) | ≈ 12,000 | range **or** `--game` |
-| `sportsbook-market-results` | closing lines + graded outcome | ≈ 12,000 | range **or** `--game` |
+| `sportsbook-closing-lines` | one row per (operator, market, selection, side); none for a selection quoted on more than one line pregame | ≈ 12,000 | range **or** `--game` |
+| `sportsbook-market-results` | one settled row per offer (`offer_key`), with its closing price | ≈ 12,000 | range **or** `--game` |
 | `sportsbook-lines` | every change-only line observation | **~190k** | `--game` only |
+| `prediction-market-closing-lines` | one row per (exchange, contract, side) | ≈ 100–2,000 | range **or** `--game` |
+| `prediction-market-results` | every contract side + the exchange's settlement | ≈ 100–2,000 | range **or** `--game` |
+| `prediction-market-lines` | every change-only contract observation | up to ~200k | `--game` only |
 | `game-state-timeline` (beta) | our estimate of the score, period, clock and situation, one row per change, with confidence | ≈ 200–1,500 | `--game` only |
 | `game-state` | latest source score, status, clock and period state | one | `--game` only |
 | `plays` | latest complete play set | varies | `--game` only |
 | `player-stats` | game, player and stable stat key | varies | `--game` only |
 | `team-stats` | game, team and stable stat key | varies | `--game` only |
 | `injuries` | league and player injury state | league-wide | `--league` only |
+
+A missing or null close is expected, not a data error: from v6 a selection first
+seen in play has no `sportsbook-closing-lines` row, and from v8 a book not
+observed for the game in the 24 hours before the start has null closing columns
+(judged per operator event from v10). Games built before v8 carry that stale
+quote as the close. See `closing_odds` in
+[references/datasets/sportsbook-closing-lines.md](references/datasets/sportsbook-closing-lines.md).
 
 Rows per game is download size, not cost. Cost is per game, not per row: a
 game counts once per period whichever dataset is read first, a
@@ -185,8 +206,9 @@ what happened: for a game's state over time use `game-state-timeline`, for
 its odds history `sportsbook-lines`. Columns and filters are in
 [references/reference-data.md](references/reference-data.md).
 
-An unsettled game's `sportsbook-lines` is served live: `get` assembles it,
-`betflux live-board GAME` shows what each operator is quoting now, and
+An unsettled game's `sportsbook-lines` and `prediction-market-lines` are served
+live: `get` assembles them, `betflux live-board GAME` shows what each operator
+is quoting now (`--dataset prediction-market-lines` for the exchanges), and
 `betflux live-tail GAME` follows new lines until interrupted. Live rows are
 provisional. Live listings are free, and a live game counts once per period
 like any other game: the first segment or board read counts it, and every
@@ -197,12 +219,50 @@ faster re-downloads the same bytes), and resume a tail with `--cursor`
 (printed when it stops) or start one with `--from-now` — a bare rerun
 backfills the whole history.
 
-`sportsbook-market-results` includes NCAAM and NCAAF with beta grading limits:
+`sportsbook-market-results` includes NCAAM and NCAAF with beta settlement limits:
 box-score facts are available, but play-by-play is absent; missing facts and unsupported
 questions remain `INDETERMINATE`. College overtime and operator rules are not
 comprehensively verified. `game-state-timeline` does not cover NCAAM or NCAAF.
 
+Prediction-market prices are not book odds. `implied_probability` / `odds` are
+the all-in cost of one contract (ask plus taker fee), comparable with a book's
+posted price; `mid_fair_*` and `microprice_fair_*` are the exchange's fair
+value, comparable with a book's de-vigged fair price, and are never de-vigged.
+`prediction-market-results` settles from the exchange's payout, so a
+fair-price or 50-50 settlement is `PARTIAL`. Line an exchange up against a
+book on `outcome_key` ([Comparing venues](#comparing-venues)). Polymarket prices
+(`prediction-market-lines`, `-closing-lines`) start at 2026-10-16; its results
+reach back to 2025. Start dates by league:
+[references/coverage.md](references/coverage.md).
+
 Per-dataset columns and the exact filter list: `references/datasets/*.md`.
+
+## Comparing venues
+
+`market_key` and `offer_key` never match across venues. To find the same bet at
+several books, or at a book and an exchange, use the keys every market dataset
+carries (the three `sportsbook-*` and three `prediction-market-*` datasets):
+
+- Equal **`outcome_key`**: the rows pay on exactly the same game result,
+  whatever the wording. One book's Over 25.5 and another's 26+ share it, as do
+  a book's 3-way first-quarter home pick and Kalshi's "home wins Q1" contract
+  bought Yes. Over 25 (a push at 25) keys apart, and so does a 2-way moneyline
+  that refunds a tie.
+- Equal **`settlement_key`**: the same result *and* the same rules for an
+  inactive player, overtime, a tie and a game cut short — the identical
+  contract. Null when a venue's rule for a needed case is not on record.
+  `terms_status` (`verified`, `inferred`, `unknown`) says how firmly the rules
+  are known.
+- `outcome_min`, `outcome_max` and `outcome_push` spell the result out
+  (`outcome_parity` on odd/even markets).
+
+Group on `outcome_key` to compare prices; use `settlement_key` when the rare
+cases matter. The keys are null for first-scorer, most-of, race-to and
+method-of-score markets, "either team by n", quarter lines (x.25, x.75), Tie No,
+and games built before them (check `dataset_version`); only for those, fall back
+to `market_type`, `period`, `side` and the line. The CLI has no key filters:
+download the files and join locally ([references/recipes.md](references/recipes.md#the-same-bet-at-every-venue)),
+or pass `outcome_key=` in Python.
 
 ## Game ids
 
@@ -225,10 +285,10 @@ front, before any download.
 
 | Filter | Datasets |
 |---|---|
-| `--league`, `--operator`, `--market-type`, `--team` | the three lines datasets |
-| `--side` | the three lines datasets |
-| `--player-id` | `sportsbook-closing-lines`, `sportsbook-market-results`, `sportsbook-lines`, `player-stats` and `injuries` |
-| `--outcome` (`WON`, `LOST`, `PUSH`, `INDETERMINATE`) | `sportsbook-market-results` |
+| `--league`, `--operator`, `--market-type`, `--team` | the six lines datasets |
+| `--side` | the six lines datasets |
+| `--player-id` | the six lines datasets, `player-stats` and `injuries` |
+| `--outcome` (`WON`, `LOST`, `PUSH`, `VOID`, `PARTIAL`, `INDETERMINATE`) | `sportsbook-market-results`, `prediction-market-results` |
 | `--metric` | `player-stats`, `team-stats`; applies reviewed restatement policy |
 | `--team-id` | `player-stats`, `team-stats` and `injuries` |
 | `--availability` | `injuries` in `live-tail` |
@@ -255,13 +315,14 @@ yourself; it keeps the transcript small. Timestamps render as ISO 8601.
 | Status | Meaning | What to do |
 |---|---|---|
 | 401 | key missing, malformed, or unrecognized | check for an explicit credential override; have the user sign in with `betflux login` if no valid saved login exists |
-| 402 `subscription-required` | key valid, but account has no active subscription | report the response details and `upgrade_url`; retry only after account access is restored |
+| 402 `subscription-required` | rare and brief: the key's record was cached before the account's plan was known (every account has at least the free sample) | retry once after a few minutes; if it persists, report the response details |
 | 403 `key-disabled` | key revoked or suspended | user must resolve account access and replace the revoked key; do not retry |
 | 403 `history-restricted` | a trial key asked for a game outside its sample: only games from the first weekend of a month (the first Saturday and the Sunday after it) can be read | do not retry; choose first-weekend games (`betflux games` lists dates) and tell the user other dates need a plan (`upgrade_url`) |
-| 403 `plan-excludes` | the plan does not include this feature: live lines (`limits.live`) or a league dataset such as `injuries` (`limits.league_datasets`); the body names `feature` and `required_tiers` | never retry on this key; skip the feature and tell the user which plans include it (`upgrade_url`) |
+| 403 `plan-excludes` | the plan does not include this feature: live lines (`limits.live`), a league dataset such as `injuries` (`limits.league_datasets`) or the prediction-market datasets (`limits.prediction_markets`); the body names `feature` and `required_tiers` | never retry on this key; skip the feature and tell the user which plans include it (`upgrade_url`) |
 | 429 `quota-exhausted` | the period's games allowance is spent and this game would be a new one; the body carries `games_used`, `games_allowance`, `reset_at` and `upgrade_url` | do not retry; keep working with the games already counted (`betflux usage games`), report when it resets and where to upgrade |
 | 429 `rate-limited` | too many requests this minute | respect `Retry-After` (the CLI and SDK retry it for you); if the client surfaces an error, report it rather than looping |
 | 429 `throttled` | an operations stop on this key | do not retry; report it |
+| 400 `validation-error` | a parameter failed validation, e.g. a `/v1/games` date range over 366 days (also from a long range `get`, which lists its games there) or only one of `date_from` / `date_to` | fix the request; split a long range into pieces of a year or less |
 | 404 `not-yet-available` | Sports data only: nothing has been published yet for that game or league, though `betflux datasets` lists its league | not a bad request and not a reason to loop: wait for publication (a game that started before 2025-01-01 00:00 UTC never will be) |
 | 404 | unknown game, dataset, or league not covered; `No route matches` on a sports data command means sports data is not enabled there | verify with `betflux games` / `betflux datasets` |
 
@@ -290,8 +351,11 @@ Read these only when the task needs them.
 
 - **[references/coverage.md](references/coverage.md)** — league/operator start dates, seasons, NFL weeks, and source-history limits
 - **[references/datasets/sportsbook-closing-lines.md](references/datasets/sportsbook-closing-lines.md)** — columns, filters, coverage
-- **[references/datasets/sportsbook-market-results.md](references/datasets/sportsbook-market-results.md)** — graded outcomes and settlement columns
+- **[references/datasets/sportsbook-market-results.md](references/datasets/sportsbook-market-results.md)** — settled outcomes and settlement columns
 - **[references/datasets/sportsbook-lines.md](references/datasets/sportsbook-lines.md)** — full line history
+- **[references/datasets/prediction-market-closing-lines.md](references/datasets/prediction-market-closing-lines.md)** — exchange opens, closes, CLV on the all-in price and the mid
+- **[references/datasets/prediction-market-results.md](references/datasets/prediction-market-results.md)** — exchange settlement from the reported payout
+- **[references/datasets/prediction-market-lines.md](references/datasets/prediction-market-lines.md)** — full exchange price history: all-in price, book, mid and microprice
 - **[references/datasets/game-state-timeline.md](references/datasets/game-state-timeline.md)** — beta: estimated state rows, confidence columns, as-of joins
 - **[references/sports-data.md](references/sports-data.md)** — snapshot and revision protocol, CLI and SDK examples
 - **[references/datasets/game-state.md](references/datasets/game-state.md)** — source game status and score columns

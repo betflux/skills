@@ -25,6 +25,62 @@ betflux get sportsbook-closing-lines \
   --format csv > det-clv.csv
 ```
 
+## Closing price and result of the same bet
+
+An offer is one selection at one line. FanDuel (main, period and over/under
+markets) and Pinnacle (player props) keep one selection id while the line
+moves, so one selection id can be several offers. `sportsbook-market-results`
+has a row per offer; `sportsbook-closing-lines` has a row only for a
+selection quoted on one line before the game started, keyed by that line's
+`offer_key`. Join the closing lines, the results and the line history on
+`offer_key`, never on `market_key` plus `selection_external_id`, which pairs
+a close at one line with a result at another. `market_key` is for
+market-level joins.
+
+```sql
+SELECT c.operator, c.market_key, c.side, c.closing_spread, c.closing_total,
+       c.clv_implied, r.outcome
+FROM read_parquet('closing.parquet') c
+JOIN read_parquet('results.parquet') r USING (offer_key)
+```
+
+Rows built before `sportsbook-closing-lines` v14 and
+`sportsbook-market-results` v16 carry no `offer_key`. Up to closing-lines
+v14 a moving selection is one row whose opening and close can be on
+different lines, and up to market-results v16 it is one result, at its
+closing line (see `dataset_version`).
+
+## The same bet at every venue
+
+`outcome_key` lines up quotes that pay on the same result, across books and
+exchanges; `market_key` and `offer_key` never match across venues. Download one
+game from each venue and join locally:
+
+```bash
+betflux get sportsbook-closing-lines --game NBA_ORL_DET_20260503 --output books.parquet
+betflux get prediction-market-closing-lines --game NBA_ORL_DET_20260503 --output exchanges.parquet
+```
+
+```sql
+-- Book against exchange: the book's closing price and the exchange's all-in cost
+-- and fair mid on the same result; an equal settlement_key is the identical contract.
+SELECT b.operator AS book, b.side, b.closing_odds AS book_odds, b.closing_implied AS book_implied,
+       x.operator AS exchange, x.closing_implied AS exchange_cost, x.closing_mid,
+       b.settlement_key = x.settlement_key AS identical_contract
+FROM read_parquet('books.parquet') b
+JOIN read_parquet('exchanges.parquet') x ON b.outcome_key = x.outcome_key;
+
+-- Book against book: every pair of books quoting the same result, however worded.
+SELECT a.operator, a.selection_name, a.closing_odds, b.operator, b.selection_name, b.closing_odds
+FROM read_parquet('books.parquet') a
+JOIN read_parquet('books.parquet') b ON a.outcome_key = b.outcome_key AND a.operator < b.operator;
+```
+
+The keys are null for markets without a single range of results (first scorer,
+race to, "either team by n", quarter lines, Tie No) and on games built before
+them, so those rows drop out of the join; compare them on `market_type`,
+`period`, `side` and the line instead.
+
 ## Line movement within a single game
 
 `sportsbook-lines` is the full change-only history — ~190k rows for one game.
@@ -53,15 +109,48 @@ Read the generated column reference; the ratio method has been removed.
 ```bash
 betflux get sportsbook-market-results \
   --league MLB --date-from 2026-07-01 --date-to 2026-07-07 \
-  --outcome WON \
-  --columns game_date,market_key,side,outcome,settled_value
+  --columns game_date,offer_key,side,outcome,settled_value,closing_odds,stake_won_fraction,stake_refunded_fraction
 ```
 
-`outcome` is `WON`, `LOST`, `PUSH`, or `INDETERMINATE`. `INDETERMINATE` means
-no trusted source could settle that exact question — it is not a loss, and
-dropping those rows silently will bias any hit-rate you compute.
+`outcome` is one of:
 
-`sportsbook-market-results` includes NCAAM and NCAAF with beta grading limits.
+- `WON` / `LOST`: settled against the result.
+- `PUSH`: the bet had action and the stake is returned (the value landed on a
+  whole-number line, or a two-way market ended level).
+- `VOID`: the bet never had action and the stake is returned (for example, a
+  player who did not take part).
+- `PARTIAL`: part of the stake won or was returned (a dead heat, a split
+  line); read the stake fractions.
+- `INDETERMINATE`: no trusted source could settle that exact question. It is
+  not a loss, and dropping those rows silently will bias any hit-rate you
+  compute.
+
+Price every settled row with the stake fractions rather than the label. A
+bet's return (stake included) is
+
+```
+stake × (stake_won_fraction × decimal_odds + stake_refunded_fraction)
+```
+
+with `decimal_odds` the price you took (`closing_odds` converted, for a bet at
+the close). `WON` is `1`/`0`, `LOST` `0`/`0`, `PUSH` and `VOID` `0`/`1`, and a
+`PARTIAL` row carries the split, e.g. two players tied for the lead of a
+most-of market is `0.5`/`0` at most books and `0.5`/`0.5` at DraftKings. Profit is the return minus the stake. Both fractions are null on
+`INDETERMINATE` rows and on games built before v10 (`dataset_version`); leave
+those out of ROI and report how many there were.
+
+```python
+def american_to_decimal(odds):
+    return 1 + (odds / 100 if odds > 0 else 100 / -odds)
+
+def bet_return(row, stake=1.0):
+    if row["stake_won_fraction"] is None or row["closing_odds"] is None:
+        return None   # INDETERMINATE, built before v10, or no pre-game close
+    return stake * (row["stake_won_fraction"] * american_to_decimal(row["closing_odds"])
+                    + row["stake_refunded_fraction"])
+```
+
+`sportsbook-market-results` includes NCAAM and NCAAF with beta settlement limits.
 Box-score facts are available, but play-by-play is absent. Missing facts and unsupported
 questions remain `INDETERMINATE`; college overtime and operator rules are not
 comprehensively verified.
@@ -90,16 +179,18 @@ priced_rows = [
 ]
 ```
 
-- `Y` — `outcome` mapped to `{WON: 1, LOST: 0}`, `PUSH`/`INDETERMINATE` dropped
-  or held out deliberately
+- `Y` — `outcome` mapped to `{WON: 1, LOST: 0}`. `PUSH` and `VOID` returned the
+  stake and `INDETERMINATE` was not settled: drop or hold them out deliberately.
+  For `PARTIAL`, use `stake_won_fraction` as a fractional label or hold it out;
+  for profit, use the return formula in [Did these bets win?](#did-these-bets-win)
 - `O` — `closing_odds` (or `opening_odds` if you are modelling the open)
 - `X` — join `game-state-timeline` per game for in-play state, or bring your own
   features
 
-Live-only selections remain graded, but their v3 `closing_odds`,
+Live-only selections are still settled, but their v3 `closing_odds`,
 `closing_implied`, and `closing_ts` are null. Use `priced_rows` for
 closing-price ROI or model evaluation; do not treat a missing close as zero
-odds or drop it from outcome-only grading summaries.
+odds or drop it from outcome-only settlement summaries.
 
 Fetch one day first and confirm the join before widening the range. A full
 season across all leagues is a large download.

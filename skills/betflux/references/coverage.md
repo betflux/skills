@@ -33,9 +33,14 @@ containing only errors or metadata do not count.
 | NCAAM | 2026-02-10 | 2025–26 regular season |
 | NCAAF | 2026-10-01 | 2026 regular season |
 
-These dates describe the source history behind the odds datasets
+The league table describes the source history behind the sportsbook odds datasets
 (`sportsbook-closing-lines`, `sportsbook-lines`, and the odds component of
-`sportsbook-market-results`). They do not establish that every game, operator, market,
+`sportsbook-market-results`). The Kalshi and Polymarket rows in the per-league
+tables below describe the prediction-market datasets, verified on
+**2026-11-23**. Kalshi's three datasets start on the same date. Polymarket's
+prices (`prediction-market-lines` and `prediction-market-closing-lines`) start
+when its order books were first captured; `prediction-market-results` comes
+from its settled contracts and reaches further back. They do not establish that every game, operator, market,
 or derived Parquet file is available from that date onward. Stats backfills
 can reach earlier than odds; they do not establish earlier sportsbook coverage
 or the start of `game-state-timeline`.
@@ -49,7 +54,10 @@ or the start of `game-state-timeline`.
 | BetMGM | 2025-10-19 | 2025 regular season, Week 7 |
 | DraftKings | 2025-10-16 | 2025 regular season, Week 7 |
 | FanDuel | 2025-10-16 | 2025 regular season, Week 7 |
+| Kalshi | 2025-08-07 | 2025 preseason, Week 1 |
 | Pinnacle | 2026-09-09 | 2026 regular season, Week 1 |
+| Polymarket — lines, closing lines | 2026-10-18 | 2026 regular season, Week 6 |
+| Polymarket — results | 2025-08-09 | 2025 preseason, Week 1 |
 
 #### NBA
 
@@ -58,7 +66,10 @@ or the start of `game-state-timeline`.
 | BetMGM | 2025-10-15 | 2025–26 preseason |
 | DraftKings | 2025-10-15 | 2025–26 preseason |
 | FanDuel | 2025-10-15 | 2025–26 preseason |
+| Kalshi | 2025-04-15 | 2024–25 postseason, play-in |
 | Pinnacle | 2026-03-26 | 2025–26 regular season |
+| Polymarket — lines, closing lines | 2026-10-16 | 2026–27 preseason |
+| Polymarket — results | 2025-04-15 | 2024–25 postseason, play-in |
 
 #### MLB
 
@@ -67,7 +78,10 @@ or the start of `game-state-timeline`.
 | BetMGM | 2025-10-15 | 2025 postseason, ALCS Game 3 |
 | DraftKings | 2025-10-15 | 2025 postseason, ALCS Game 3 |
 | FanDuel | 2025-10-15 | 2025 postseason, ALCS Game 3 |
+| Kalshi | 2025-04-16 | 2025 regular season |
 | Pinnacle | 2026-03-26 | 2026 regular season |
+| Polymarket — lines, closing lines | 2026-10-17 | 2026 postseason |
+| Polymarket — results | 2025-04-16 | 2025 regular season |
 
 #### NHL
 
@@ -76,7 +90,10 @@ or the start of `game-state-timeline`.
 | BetMGM | 2026-02-25 | 2025–26 regular season |
 | DraftKings | 2026-02-25 | 2025–26 regular season |
 | FanDuel | 2026-02-25 | 2025–26 regular season |
+| Kalshi | 2025-04-19 | 2024–25 postseason |
 | Pinnacle | 2026-03-26 | 2025–26 regular season |
+| Polymarket — lines, closing lines | 2026-10-16 | 2026–27 regular season |
+| Polymarket — results | 2025-04-19 | 2024–25 postseason |
 
 #### NCAAM
 
@@ -85,7 +102,10 @@ or the start of `game-state-timeline`.
 | BetMGM | 2026-02-11 | 2025–26 regular season |
 | DraftKings | 2026-02-10 | 2025–26 regular season |
 | FanDuel | 2026-02-10 | 2025–26 regular season |
+| Kalshi | 2025-11-03 | 2025–26 regular season |
 | Pinnacle | 2026-03-26 | 2025–26 postseason |
+| Polymarket — lines, closing lines | 2026-11-05 | 2026–27 regular season |
+| Polymarket — results | 2025-11-03 | 2025–26 regular season |
 
 #### NCAAF
 
@@ -94,7 +114,10 @@ or the start of `game-state-timeline`.
 | BetMGM | 2026-10-01 | 2026 regular season |
 | DraftKings | 2026-10-01 | 2026 regular season |
 | FanDuel | 2026-10-01 | 2026 regular season |
+| Kalshi | 2026-08-27 | 2026 regular season, Week 1 |
 | Pinnacle | 2026-10-01 | 2026 regular season |
+| Polymarket — lines, closing lines | 2026-10-16 | 2026 regular season, Week 7 |
+| Polymarket — results | 2026-08-27 | 2026 regular season, Week 1 |
 
 ### Verify a historical query
 

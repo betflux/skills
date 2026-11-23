@@ -2,20 +2,15 @@
 
 # sportsbook-lines
 
-The sportsbook lines dataset · 74 columns · ~190,000 rows per game
+The sportsbook lines dataset · 82 columns · ~190,000 rows per game
 
 | | |
 |---|---|
 | Leagues | MLB, NBA, NHL, NFL, NCAAM, NCAAF |
 | Addressing | `--game` only |
-| Filters | `league`, `operator`, `market_type`, `team`, `mainline`, `side`, `player_id` |
+| Filters | `league`, `operator`, `market_type`, `team`, `mainline`, `side`, `player_id`, `outcome_key`, `settlement_key` |
 
 > Addressed one game at a time.
-
-> Only 13 of 74 columns carry descriptions — this dataset's row
-> schema is declared as column tuples rather than described fields. Types
-> and nullability below are authoritative; a blank description means not
-> yet written, not "no meaning".
 
 ## Columns
 
@@ -28,7 +23,7 @@ The sportsbook lines dataset · 74 columns · ~190,000 rows per game
 | `home_team` | `string` | no |  |
 | `away_team` | `string` | no |  |
 | `operator` | `string` | no |  |
-| `timestamp` | `string` | no | UTC timestamp (Parquet timestamptz). |
+| `timestamp` | `string` | no | When the observation was recorded (UTC). Rows are change-only: a selection gets a new row only when something meaningful changed, so the gap to its next row is how long this price stood. |
 | `market_external_id` | `string` | no |  |
 | `market_type` | `string` | no | Market type as of this row, e.g. SPREAD, MONEYLINE, TOTAL, PLAYER_METRIC_OVER_UNDER. |
 | `structure` | `string` | no |  |
@@ -70,28 +65,36 @@ The sportsbook lines dataset · 74 columns · ~190,000 rows per game
 | `calibration_first_timestamp` | `string` | yes | Earliest accepted observation used in the selected synthetic-margin estimate. Null for an assumed default or MECE. |
 | `calibration_last_timestamp` | `string` | yes | Latest accepted observation used in the selected synthetic-margin estimate; never later than this row timestamp. Null for an assumed default or MECE. |
 | `complement_odds` | `number` | yes | American odds of the complement used for de-vigging. Real paired sides use the partner quote; independent or unpaired sides use synthetic_overround calibrated only through this observation timestamp. Null for MECE or when no consistent synthetic complement exists; the latter also produces null fair values. |
-| `multiplicative_fair_prob` | `number` | yes |  |
-| `multiplicative_fair_american` | `number` | yes |  |
-| `multiplicative_fair_decimal` | `number` | yes |  |
-| `additive_fair_prob` | `number` | yes |  |
-| `additive_fair_american` | `number` | yes |  |
-| `additive_fair_decimal` | `number` | yes |  |
-| `power_fair_prob` | `number` | yes |  |
-| `power_fair_american` | `number` | yes |  |
-| `power_fair_decimal` | `number` | yes |  |
-| `power_k` | `number` | yes |  |
-| `shin_fair_prob` | `number` | yes |  |
-| `shin_fair_american` | `number` | yes |  |
-| `shin_fair_decimal` | `number` | yes |  |
-| `shin_z` | `number` | yes |  |
-| `probit_fair_prob` | `number` | yes |  |
-| `probit_fair_american` | `number` | yes |  |
-| `probit_fair_decimal` | `number` | yes |  |
-| `probit_shift` | `number` | yes |  |
-| `logit_fair_prob` | `number` | yes |  |
-| `logit_fair_american` | `number` | yes |  |
-| `logit_fair_decimal` | `number` | yes |  |
-| `logit_shift` | `number` | yes |  |
+| `multiplicative_fair_prob` | `number` | yes | Multiplicative de-vig fair probability (0-1): divides each implied probability by their sum. Solved from the market's prices as they stood at this row's timestamp: a mutually exclusive (MECE) market's selections together, a paired selection against its partner's quote, and any other selection against a synthetic complement (complement_odds) priced with synthetic_overround, measured from the book's quotes or a 5% default. Null when the selection has no complement (complement_odds null: at the 5% default, a longshot at or beyond about +1900), on a MECE snapshot with fewer than two selections or one that holds an outcome twice, and on rows of a poll that arrived older than one already applied to the market. From v5 the synthetic margin uses only quotes at or before the row's timestamp; artifacts before v5 used a retrospective whole-game margin and must be rebuilt before point-in-time use. |
+| `multiplicative_fair_american` | `number` | yes | multiplicative_fair_prob as American odds. Null with multiplicative_fair_prob. |
+| `multiplicative_fair_decimal` | `number` | yes | multiplicative_fair_prob as decimal odds. Null with multiplicative_fair_prob. |
+| `additive_fair_prob` | `number` | yes | Additive de-vig fair probability (0-1): subtracts an equal share of the margin from each implied probability. Solved from the market's prices as they stood at this row's timestamp: a mutually exclusive (MECE) market's selections together, a paired selection against its partner's quote, and any other selection against a synthetic complement (complement_odds) priced with synthetic_overround, measured from the book's quotes or a 5% default. Null when the selection has no complement (complement_odds null: at the 5% default, a longshot at or beyond about +1900), on a MECE snapshot with fewer than two selections or one that holds an outcome twice, and on rows of a poll that arrived older than one already applied to the market, and when an equal share would take a probability to zero or below. From v5 the synthetic margin uses only quotes at or before the row's timestamp; artifacts before v5 used a retrospective whole-game margin and must be rebuilt before point-in-time use. |
+| `additive_fair_american` | `number` | yes | additive_fair_prob as American odds. Null with additive_fair_prob. |
+| `additive_fair_decimal` | `number` | yes | additive_fair_prob as decimal odds. Null with additive_fair_prob. |
+| `power_fair_prob` | `number` | yes | Power de-vig fair probability (0-1): raises each implied probability to one exponent (power_k) chosen so they sum to 1, taking more margin from longshots. Solved from the market's prices as they stood at this row's timestamp: a mutually exclusive (MECE) market's selections together, a paired selection against its partner's quote, and any other selection against a synthetic complement (complement_odds) priced with synthetic_overround, measured from the book's quotes or a 5% default. Null when the selection has no complement (complement_odds null: at the 5% default, a longshot at or beyond about +1900), on a MECE snapshot with fewer than two selections or one that holds an outcome twice, and on rows of a poll that arrived older than one already applied to the market, and when the solve degenerated on this selection (it hit its bound, or collapsed, inflated, flattened or reordered the probabilities). From v5 the synthetic margin uses only quotes at or before the row's timestamp; artifacts before v5 used a retrospective whole-game margin and must be rebuilt before point-in-time use. |
+| `power_fair_american` | `number` | yes | power_fair_prob as American odds. Null with power_fair_prob. |
+| `power_fair_decimal` | `number` | yes | power_fair_prob as decimal odds. Null with power_fair_prob. |
+| `power_k` | `number` | yes | The power method's exponent (1 or more) for this solve. Null with power_fair_prob. |
+| `shin_fair_prob` | `number` | yes | Shin de-vig fair probability (0-1): assumes a share of the money (shin_z) comes from insiders and solves for it. Solved from the market's prices as they stood at this row's timestamp: a mutually exclusive (MECE) market's selections together, a paired selection against its partner's quote, and any other selection against a synthetic complement (complement_odds) priced with synthetic_overround, measured from the book's quotes or a 5% default. Null when the selection has no complement (complement_odds null: at the 5% default, a longshot at or beyond about +1900), on a MECE snapshot with fewer than two selections or one that holds an outcome twice, and on rows of a poll that arrived older than one already applied to the market, and when the solve degenerated on this selection (it hit its bound, or collapsed, inflated, flattened or reordered the probabilities). From v5 the synthetic margin uses only quotes at or before the row's timestamp; artifacts before v5 used a retrospective whole-game margin and must be rebuilt before point-in-time use. |
+| `shin_fair_american` | `number` | yes | shin_fair_prob as American odds. Null with shin_fair_prob. |
+| `shin_fair_decimal` | `number` | yes | shin_fair_prob as decimal odds. Null with shin_fair_prob. |
+| `shin_z` | `number` | yes | Shin's insider share for this solve; on a symmetric two-way market it equals the margin. Null with shin_fair_prob. |
+| `probit_fair_prob` | `number` | yes | Probit de-vig fair probability (0-1): moves every implied probability's normal z-score by one constant (probit_shift) so they sum to 1. Solved from the market's prices as they stood at this row's timestamp: a mutually exclusive (MECE) market's selections together, a paired selection against its partner's quote, and any other selection against a synthetic complement (complement_odds) priced with synthetic_overround, measured from the book's quotes or a 5% default. Null when the selection has no complement (complement_odds null: at the 5% default, a longshot at or beyond about +1900), on a MECE snapshot with fewer than two selections or one that holds an outcome twice, and on rows of a poll that arrived older than one already applied to the market, and when the solve degenerated on this selection (it hit its bound, or collapsed, inflated, flattened or reordered the probabilities). From v5 the synthetic margin uses only quotes at or before the row's timestamp; artifacts before v5 used a retrospective whole-game margin and must be rebuilt before point-in-time use. |
+| `probit_fair_american` | `number` | yes | probit_fair_prob as American odds. Null with probit_fair_prob. |
+| `probit_fair_decimal` | `number` | yes | probit_fair_prob as decimal odds. Null with probit_fair_prob. |
+| `probit_shift` | `number` | yes | The probit method's z-score shift for this solve. Null with probit_fair_prob. |
+| `logit_fair_prob` | `number` | yes | Logit de-vig fair probability (0-1): moves every implied probability's log-odds by one constant (logit_shift) so they sum to 1; this is the odds-ratio method, every odds ratio scaled by one constant. Solved from the market's prices as they stood at this row's timestamp: a mutually exclusive (MECE) market's selections together, a paired selection against its partner's quote, and any other selection against a synthetic complement (complement_odds) priced with synthetic_overround, measured from the book's quotes or a 5% default. Null when the selection has no complement (complement_odds null: at the 5% default, a longshot at or beyond about +1900), on a MECE snapshot with fewer than two selections or one that holds an outcome twice, and on rows of a poll that arrived older than one already applied to the market, and when the solve degenerated on this selection (it hit its bound, or collapsed, inflated, flattened or reordered the probabilities). From v5 the synthetic margin uses only quotes at or before the row's timestamp; artifacts before v5 used a retrospective whole-game margin and must be rebuilt before point-in-time use. |
+| `logit_fair_american` | `number` | yes | logit_fair_prob as American odds. Null with logit_fair_prob. |
+| `logit_fair_decimal` | `number` | yes | logit_fair_prob as decimal odds. Null with logit_fair_prob. |
+| `logit_shift` | `number` | yes | The logit (odds-ratio) method's log-odds shift for this solve. Null with logit_fair_prob. |
 | `market_key` | `string` | yes | Global market identity: `OPERATOR:market_external_id` — the operator code plus the operator's own market id. Join key across sportsbook-closing-lines, sportsbook-market-results and sportsbook-lines. Always populated from v3 on. |
 | `is_mainline` | `boolean` | yes | True when the row is the operator's primary (non-alternate) full-game spread, moneyline or total — the headline line, not a rung of the alternate ladder. Period lines, team totals and props are false. Decided per snapshot from the operator's own signal, so a book that re-points its headline slot as the line moves flips it between rows. Null on games built before v6. |
+| `outcome_key` | `string` | yes | Same-result key: a 16-character hash shared by every quote, at any book or exchange, that pays on the same game result (same game, player or team, stat, period, clock window, and the range in outcome_min, outcome_max and outcome_push, or the parity in outcome_parity). Null for markets without a single range of results: either-team margin bands, quarter lines (x.25, x.75), Tie No, and first-scorer, most-of, race-to and method markets. Null on games built before v7. |
+| `settlement_key` | `string` | yes | Same-price key: outcome_key plus the venue's rules for the unusual cases that can change this bet (overtime, a player who does not take part, a shortened game, a result on the line), read for a straight bet at the time of the quote. Quotes sharing it are the same contract, so their prices compare directly. Null when outcome_key is null, when a rule it needs is not stated (terms_status unknown), and for venues without registered rules. Null on games built before v7. |
+| `outcome_min` | `number` | yes | The lowest result that wins, in whole steps of the stat: Over 25.5 is 26. For moneylines, spreads and winning margins the result is the score margin between the game's two teams, ordered by team id. For overtime markets the result is the number of overtime periods (extra innings in MLB) played: 'reaches overtime' Yes is 1, No has outcome_max 0. Null when unbounded below or unkeyed. |
+| `outcome_max` | `number` | yes | The highest result that wins, as outcome_min. Null when unbounded above or unkeyed. |
+| `outcome_push` | `number` | yes | The result that neither wins nor loses: a whole-number line, or a level score on a two-way moneyline. Null when there is none. |
+| `terms_status` | `string` | yes | How the rules in settlement_key are known: verified (the venue's own text), inferred (a general clause or other venues' text), unknown (a needed rule is not stated; settlement_key is null). Null on games built before v7. |
+| `outcome_parity` | `string` | yes | For odd/even markets, the result that wins: odd or even, on the game's combined score or the one team's score (0 counts as even). outcome_min, outcome_max and outcome_push are then null. Null for every other market and when unkeyed. Null on games built before v9. |
+| `offer_key` | `string` | yes | Same-offer key: a 16-character hash of market_key, selection_external_id and the line the venue quoted (its own line field, else spread, else total), so it names one bet at one line at one venue. Some books keep a selection id while the line moves under it (FanDuel main and period lines, team totals and player over/unders; Pinnacle player props); each line is then a new offer_key under one selection_external_id. Null on games built before v10. |
 | `dataset_version` | `string` | yes | Version of the dataset this game's file was built at, e.g. `v5`. Games in one pull can differ: versions of a compatibility line only add columns or carry documented changes (see `versions` on /v1/datasets). Columns added after a game's version read null for it. Files built before this column existed lack it entirely (null when read with DuckDB `union_by_name = true`); the `X-Betflux-Dataset-Version` response header still names their version. |

@@ -75,8 +75,8 @@ works at the allowance.
 ```
 key valid (https://api.betflux.ai)
 plan: <label> (<TIER>) — <n> requests/min
-games: <used> of <allowance> used this period (<pct>%) · <left> left · <exempt> recent (free) · resets YYYY-MM-DD
-limits: games from the last <d> days are free · live: yes|no · league datasets: yes|no
+games: <used> of <allowance> used this period (<pct>%) · <left> left · resets YYYY-MM-DD
+limits: live: yes|no · league datasets: yes|no
 ```
 
 An uncapped plan prints `games: <used> used this period · no cap`; a trial key
@@ -88,15 +88,15 @@ from before games metering the games lines are absent.
 ### `betflux usage` / `betflux usage games`
 
 `betflux usage` prints the same plan and games lines as `keys check`.
-`betflux usage games` lists the games counted or exempt this period, newest
-read first — every one is free to read again, in any dataset, until the
+`betflux usage games` lists the games counted this period, newest read
+first — every one is free to read again, in any dataset, until the
 period resets. Listing them counts nothing.
 
 | Option | Notes |
 |---|---|
 | `--league` | e.g. `NFL` |
 | `--from`, `--to` | Inclusive game date, `YYYY-MM-DD` |
-| `--json` | A JSON array of `{game_id, first_read_at, first_dataset, cost}` (`cost` is `counted` or `exempt`) |
+| `--json` | A JSON array of `{game_id, first_read_at, first_dataset, cost}` (`cost` is `counted`) |
 
 ### `betflux datasets [--format]`
 
@@ -118,11 +118,11 @@ Every field beyond the teams and schedule is nullable.
 | Option | Notes |
 |---|---|
 | `--league` | e.g. `NBA` |
-| `--date-from`, `--date-to` | Inclusive ET game date, `YYYY-MM-DD` |
+| `--date-from`, `--date-to` | Inclusive ET game date, `YYYY-MM-DD`; both or neither, at most 366 days apart (the API answers 400 `validation-error` otherwise, and the CLI does not split the range) |
 | `--team` | Canonical team name; matches home or away |
-| `--status` | `SCHEDULED`, `STARTED`, `COMPLETED` |
+| `--status` | `SCHEDULED`, `DELAYED`, `STARTED`, `SUSPENDED`, `COMPLETED`, `POSTPONED` |
 | `--id` | Fetch one game by id instead of listing |
-| `--cost` | Adds a `free_to_read` column: `true` when the game is already counted or exempt this period, so reading it costs nothing; `false` when it would count as a new game. One preview call (`POST /v1/me/games/preview`) over the listed ids; opt-in because it is one more request |
+| `--cost` | Adds a `free_to_read` column: `true` when the game is already counted this period, so reading it costs nothing; `false` when it would count as a new game. One preview call (`POST /v1/me/games/preview`) over the listed ids; opt-in because it is one more request |
 | `--format`, `--columns`, `--wide` | Output control; the default table is a curated subset, `--wide` shows every column |
 
 Listing games is free and counts nothing. `--id` is exclusive: pairing it with any filter is an error. For one game's
@@ -145,15 +145,16 @@ re-reads and the other datasets of a counted game are free.
 anything (one free `POST /v1/me/games/preview` over the games in the range):
 
 - `--dry-run` prints the preview and exits 0 without downloading or counting
-  anything: how many games are new (would count), already counted (free) and
-  recent (free), and whether the pull fits in what is left. With `--format
-  json` the preview is JSON (`games` per id, `new`, `already`, `exempt`,
+  anything: how many games are new (would count) and already counted (free),
+  and whether the pull fits in what is left. With `--format json` the preview
+  is JSON (`games` per id, `new`, `already`, `exempt` (always 0: every game
+  counts), `restricted` (outside a trial key's first-weekend sample, refused),
   `invalid`, `games_used`, `games_allowance`, `games_remaining`, `fits`,
-  `over_by`). With `--game` it previews that one game; on a league
+  `over_by`, `enforced`). With `--game` it previews that one game; on a league
   snapshot it is refused, since league snapshots never count a game.
 - A pull that would exceed the allowance aborts before downloading (exit 1,
   `this pull would exceed your games allowance: …`). `--allow-partial` pulls
-  what fits instead — every already-counted or exempt game plus the first new
+  what fits instead — every already-counted game plus the first new
   ones that fit, in listing order — and prints a `note:` naming how many were
   skipped.
 - On a gateway without the preview endpoint a plain pull proceeds without the
@@ -161,8 +162,7 @@ anything (one free `POST /v1/me/games/preview` over the games in the range):
   `--dry-run` fails, since it has nothing to report.
 
 After the read, one stderr line reports what it cost and what is left:
-`games: N new, M already counted · X of Y left · resets YYYY-MM-DD`, with
-`, K recent (free)` appended when the plan's recent-game window applied. An
+`games: N new, M already counted · X of Y left · resets YYYY-MM-DD`. An
 uncapped plan reads `games: N read · U used this period · no cap`. `--quiet`
 silences it (and the `note:` lines). A single-game `get` on a plan that sends
 no cost headers prints no line rather than spending an extra request.
@@ -171,24 +171,32 @@ no cost headers prints no line rather than spending an extra request.
 
 | Form | Datasets |
 |---|---|
-| `--date-from` + `--date-to` (+ optional `--league`) | `sportsbook-closing-lines`, `sportsbook-market-results` |
-| `--game <id>` | the four original datasets plus the sports datasets `game-state`, `plays`, `player-stats`, `team-stats` |
+| `--league` + `--date-from` + `--date-to` (all three) | `sportsbook-closing-lines`, `sportsbook-market-results`, `prediction-market-closing-lines`, `prediction-market-results` |
+| `--game <id>` | those four, `sportsbook-lines`, `prediction-market-lines`, `game-state-timeline`, and the sports datasets `game-state`, `plays`, `player-stats`, `team-stats` |
 | `--league <code>` without `--game` | `injuries` |
 
-`sportsbook-lines`, `game-state-timeline`, and the four sports data game datasets are
-`--game`-only. `injuries` is `--league`-only.
+`sportsbook-lines`, `prediction-market-lines`, `game-state-timeline`, and the
+four sports data game datasets are `--game`-only. `injuries` is
+`--league`-only.
+
+A range lists its games through `/v1/games`, so it may span at most 366 days
+(400 `validation-error` otherwise); the CLI does not split it, so run one
+`get` per year or less. A range skips every game that has no file for the
+dataset (not settled yet, or not served for it) without an error, while
+`--game` on such a game fails with a 404. Compare the games a range returned
+with `betflux games` for the same range before calling it complete.
 
 **Filters** (rows are filtered locally after download; team and league also
 narrow game discovery on range queries, reducing downloads):
 
 | Option | Applies to |
 |---|---|
-| `--operator` | the three lines datasets |
-| `--market-type` | the three lines datasets |
-| `--team` | the three lines datasets; matches home or away |
-| `--side` | the three lines datasets, e.g. `HOME`, `OVER` |
-| `--player-id` | Original line/result datasets, player stats and injuries |
-| `--outcome` | `sportsbook-market-results` only: `WON`, `LOST`, `PUSH`, `INDETERMINATE` |
+| `--operator` | the six sportsbook and prediction-market lines datasets |
+| `--market-type` | the six lines datasets |
+| `--team` | the six lines datasets; matches home or away |
+| `--side` | the six lines datasets, e.g. `HOME`, `OVER` |
+| `--player-id` | the six lines datasets, where it matches either player-id list (`market_player_ids` or `selection_player_ids`; a row matching both is returned once); player stats and injuries |
+| `--outcome` | `sportsbook-market-results` and `prediction-market-results`: `WON`, `LOST`, `PUSH`, `VOID`, `PARTIAL`, `INDETERMINATE` |
 | `--metric` | Player/team stats; applies the reviewed restatement policy |
 | `--team-id` | Player/team stats and injuries |
 
@@ -235,7 +243,8 @@ the SDK, not a server file.
 The current board for a live game: one row per selection each operator is
 believed to be quoting, with `quote_state` (`live` / `stale_suspect`),
 `last_changed_at` and `operator_observed_through` on top of the
-`sportsbook-lines` columns. A snapshot, not history. A board read counts the
+`sportsbook-lines` columns (`--dataset prediction-market-lines` for the
+exchanges, on their own columns). A snapshot, not history. A board read counts the
 game once per period like any other read of it, so the board of a game
 already counted is free; it needs a plan with `limits.live` (403
 `plan-excludes` otherwise). Once the game has settled it exits 0 and points
@@ -244,6 +253,7 @@ at `betflux get sportsbook-lines --game <game>`. It ends with the same
 
 | Option | Notes |
 |---|---|
+| `--dataset` | `sportsbook-lines` (default) or `prediction-market-lines` |
 | `--operator` | One operator's board file instead of every operator's |
 | `--output PATH` | Save as Parquet instead of rendering rows |
 | `--columns`, `--wide`, `--format` | As `get` |
@@ -251,7 +261,8 @@ at `betflux get sportsbook-lines --game <game>`. It ends with the same
 
 ### `betflux live-tail <game>`
 
-Follows a live game's new lines until Ctrl-C. Each poll lists what is new
+Follows a live game's new lines until Ctrl-C (`--dataset
+prediction-market-lines` for the exchanges' lines). Each poll lists what is new
 since the cursor (a position, not a timestamp; the listing is free) and
 downloads the segments it names — the open tail on every poll in which it
 grew. The game counts once per period, on the first segment read; every later

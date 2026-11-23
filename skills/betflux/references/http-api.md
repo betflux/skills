@@ -17,10 +17,14 @@ For non-Python callers. Every `/v1` request needs `Authorization: Bearer bfx_liv
 | `GET` | `/v1/games` | List games with league, ET date-range, team, and status filters. |
 | `GET` | `/v1/games/{game_id}` | Fetch a single game by id. |
 | `GET` | `/v1/games/{game_id}/{dataset}` | Download a dataset's per-game Parquet artifact. |
-| `GET` | `/v1/games/{game_id}/sportsbook-lines/segments` | List a live game's line segments (manifest + position cursor). |
-| `GET` | `/v1/games/{game_id}/sportsbook-lines/segments/{seq}` | Download one live segment's Parquet. |
-| `GET` | `/v1/games/{game_id}/sportsbook-lines/board` | List a live game's current board files. |
-| `GET` | `/v1/games/{game_id}/sportsbook-lines/board/{operator}` | Download one operator's live board Parquet. |
+| `GET` | `/v1/games/{game_id}/{dataset}/live/segments` | List a live game's line segments (manifest + position cursor). |
+| `GET` | `/v1/games/{game_id}/sportsbook-lines/segments` | List a live game's line segments (manifest + position cursor). (deprecated path) |
+| `GET` | `/v1/games/{game_id}/{dataset}/live/segments/{seq}` | Download one live segment's Parquet. |
+| `GET` | `/v1/games/{game_id}/sportsbook-lines/segments/{seq}` | Download one live segment's Parquet. (deprecated path) |
+| `GET` | `/v1/games/{game_id}/{dataset}/live/board` | List a live game's current board files. |
+| `GET` | `/v1/games/{game_id}/sportsbook-lines/board` | List a live game's current board files. (deprecated path) |
+| `GET` | `/v1/games/{game_id}/{dataset}/live/board/{operator}` | Download one operator's live board Parquet. |
+| `GET` | `/v1/games/{game_id}/sportsbook-lines/board/{operator}` | Download one operator's live board Parquet. (deprecated path) |
 | `GET` | `/v1/games/{game_id}/{dataset}/snapshot` | Current or historical complete sports data snapshot manifest. |
 | `GET` | `/v1/games/{game_id}/{dataset}/changes` | List complete sports data revisions after a scope-bound cursor. |
 | `GET` | `/v1/games/{game_id}/{dataset}/revisions/{epoch}/{revision}/{kind}/{index}` | Download one immutable Parquet file from a revision manifest. |
@@ -37,7 +41,7 @@ For non-Python callers. Every `/v1` request needs `Authorization: Bearer bfx_liv
 | `GET` | `/v1/leagues/{league}/{dataset}/archives/{archive_id}/changes/{revision}/{index}` | Download a pinned archive change Parquet file. |
 | `GET` | `/v1/me` | Introspect the calling API key: tier, rate limit, and the period's games usage. |
 | `POST` | `/v1/me/games/preview` | Price a list of game ids against the period's games allowance without counting any. |
-| `GET` | `/v1/me/games` | List the games counted or exempt this period (free to read again), newest read first. |
+| `GET` | `/v1/me/games` | List the games counted this period (free to read again), newest read first. |
 
 ## Payloads
 
@@ -73,14 +77,14 @@ game, and reachable when the allowance is spent.
 | `plan.label`, `plan.size` | The plan's display name and, for plans sold in sizes, which size (`size` null otherwise) |
 | `limits.rate_limit_per_minute` | The effective per-minute limit for the channel the request came in on |
 | `limits.games_per_period` | Games the plan allows per period; `null` means uncapped |
-| `limits.free_recent_game_days` | Games dated within this many days are free (`exempt`); `null` when the plan has no such window |
+| `limits.free_recent_game_days` | Always `null`: every game counts. Kept for older clients; no game is free by its date |
 | `limits.max_keys` | API keys the account may hold |
 | `limits.live`, `limits.league_datasets` | Whether live lines and league datasets are included; a read of an excluded feature is 403 `plan-excludes` |
 | `limits.sample` | `"first-weekend"` on a trial key: only games from the first Saturday of a month and the Sunday after it can be read; `null` on every other plan |
 | `usage.unit` | `"games"` |
 | `usage.period_start`, `usage.resets_at` | ISO instants (UTC): when the current period began and when the counters reset |
 | `usage.games_used`, `usage.games_allowance`, `usage.games_remaining` | The period's counters; `games_allowance` and `games_remaining` are `null` when uncapped |
-| `usage.games_exempt` | Games read free this period under the recent-game window |
+| `usage.games_exempt` | Always `0`: every game counts. Kept for older clients |
 | `usage.rows_used` | Rows served this period — telemetry, never a limit |
 | `usage.counted_by_league` | Counted games per league, e.g. `{"NFL": 120, "NBA": 40}`; the ids are not listed here |
 | `upgrade_url` | Where to change plan |
@@ -89,21 +93,25 @@ game, and reachable when the allowance is spent.
 **`POST /v1/me/games/preview`** with `{"game_ids": [...]}` (at most 5,000
 ids) prices a pull before it is made. It counts nothing. The response is
 `{"games": [{"game_id", "cost"}], "games_used", "games_allowance",
-"games_remaining", "fits", "over_by"}` where `cost` is `new` (would
-count), `already` (counted this period, free), `exempt` (within the
-recent-game window, free) or `invalid`; `fits` says whether every new game
-fits in `games_remaining` and `over_by` how many do not. 503 when the usage
-ledger is unreachable.
+"games_remaining", "fits", "over_by", "enforced"}` where `cost` is `new`
+(would count), `already` (counted this period, free), `restricted` (a trial
+key's game outside the first-weekend sample: every dataset refuses it with
+403 `history-restricted`) or `invalid` (not a game id); `exempt` is in the
+schema for older clients but never returned. `fits` says whether every new
+game fits in `games_remaining` and `over_by` how many do not; `enforced`
+says whether the allowance is enforced for this key today (false on an
+uncapped plan and while a plan's allowance is still being measured, when
+`fits` is always true). 503 when the usage ledger is unreachable.
 
-**`GET /v1/me/games`** lists the games counted or exempt this period, newest
+**`GET /v1/me/games`** lists the games counted this period, newest
 read first, filtered by `league`, `date_from` and `date_to`, paginated with
 `limit` (default 200, at most 1,000) and `cursor` as `{data, next_cursor}`.
 Each item is `{game_id, first_read_at, first_dataset, cost}` with `cost`
-`counted` or `exempt`; both stay free to read again all period. It counts
-nothing.
+`counted` (`exempt` is in the schema but never returned); every listed game
+stays free to read again all period. It counts nothing.
 
 **Response headers on a counted read** (capped plans): `x-betflux-game:
-new | already | exempt` says what this read cost, and
+new | already` says what this read cost, and
 `x-betflux-games-remaining` what is left. An uncapped plan sends neither.
 
 **Refusals**, all RFC 9457 problem+json — dispatch on `type`
